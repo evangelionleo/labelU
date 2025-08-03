@@ -1,19 +1,24 @@
 import React from 'react';
-import { Card, Row, Col, Typography, Space } from 'antd';
+import { Card, Row, Col, Typography, Space, Button } from 'antd';
 import { useTranslation } from '@labelu/i18n';
 import { FlexLayout } from '@labelu/components-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRightOutlined } from '@ant-design/icons';
 
 const { Title, Paragraph } = Typography;
 
 const CapabilityShowcase: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const capabilities = [
     {
       title: '图像标注',
       description: '支持2D边界框、语义分割、多边形、关键点等多种标注方式',
       icon: '🖼️',
-      features: ['目标检测', '场景分析', '图像识别', '机器翻译']
+      features: ['目标检测', '场景分析', '图像识别', '机器翻译'],
+      hasDemo: true,
+      demoPath: '/capability-showcase/image-annotation'
     },
     {
       title: '视频标注',
@@ -69,6 +74,16 @@ const CapabilityShowcase: React.FC = () => {
                     ))}
                   </ul>
                 </div>
+                {capability.hasDemo && (
+                  <Button 
+                    type="primary"
+                    icon={<ArrowRightOutlined />}
+                    onClick={() => navigate(capability.demoPath!)}
+                    style={{ width: '100%' }}
+                  >
+                    体验演示
+                  </Button>
+                )}
               </Space>
             </Card>
           </Col>

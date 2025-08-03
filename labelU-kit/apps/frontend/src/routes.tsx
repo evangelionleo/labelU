@@ -21,6 +21,7 @@ import { registerLoader } from './loaders/register.loader';
 import { loginLoader } from './loaders/login.loader';
 import LoginPage from './pages/login';
 import CapabilityShowcase from './pages/CapabilityShowcase';
+import ImageAnnotation from './pages/CapabilityShowcase/ImageAnnotation';
 
 function Root() {
   const location = useLocation();
@@ -138,6 +139,15 @@ const routes: RouteObject[] = [
           {
             index: true,
             element: <CapabilityShowcase />,
+          },
+          {
+            path: 'image-annotation',
+            element: <ImageAnnotation />,
+            handle: {
+              crumb: () => {
+                return '图像标注演示';
+              },
+            },
           },
         ],
       },
