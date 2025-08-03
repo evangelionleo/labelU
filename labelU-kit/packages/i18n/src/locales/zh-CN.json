@@ -56,7 +56,7 @@
   "signUpSuccess": "注册成功",
   "signUpFailed": "注册失败",
   "alreadyHaveAccount": "已有账号？",
-  "taskList": "任务列表",
+  "taskList": "任务大厅",
   "taskEdit": "任务编辑",
   "createTask": "新建任务",
   "start": "开始标注",
@@ -366,5 +366,8 @@
   "double": "双向箭头",
   "none": "无箭头",
   "relationToolTooltip": "关联关系工具只能与矩形或多边形工具一起使用",
-  "platformTitle": "智源数据标注平台"
+
+  
+  "platformTitle": "智源数据标注平台",
+  "capabilityShowcase": "能力展示"
 }

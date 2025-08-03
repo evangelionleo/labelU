@@ -20,6 +20,7 @@ import RequireAuth from './components/RequireSSO';
 import { registerLoader } from './loaders/register.loader';
 import { loginLoader } from './loaders/login.loader';
 import LoginPage from './pages/login';
+import CapabilityShowcase from './pages/CapabilityShowcase';
 
 function Root() {
   const location = useLocation();
@@ -122,6 +123,21 @@ const routes: RouteObject[] = [
                 ],
               },
             ],
+          },
+        ],
+      },
+      {
+        path: 'capability-showcase',  // 去掉开头的斜杠
+        element: <MainLayout />,      // 使用主布局
+        handle: {
+          crumb: () => {
+            return i18n.t('capabilityShowcase');
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <CapabilityShowcase />,
           },
         ],
       },

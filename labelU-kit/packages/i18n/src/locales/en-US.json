@@ -368,5 +368,8 @@
   "double": "Double",
   "none": "None",
   "relationToolTooltip": "The relation tool can only be used with rectangle or polygon tools",
-  "platformTitle": "Zhiyuan Data Annotation Platform"
+
+
+  "platformTitle": "Zhiyuan Data Annotation Platform",
+  "capabilityShowcase": "Capability Showcase"
 }
