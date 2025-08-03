@@ -11,5 +11,5 @@ export const NavigationWrapper = styled(FlexLayout)`
 
 export const LabeluLogo = styled(Logo)`
   width: 120px;
-  height: 32px;
+  height: 45px;
 `;
