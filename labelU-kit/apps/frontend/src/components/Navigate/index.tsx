@@ -42,7 +42,15 @@ const Homepage = () => {
         <Link to="/">
           <FlexLayout.Item flex items="center">
             <LabeluLogo />
-
+            {/* 添加标题 */}
+            <span style={{ 
+              marginLeft: '12px', 
+              fontSize: '18px', 
+              fontWeight: 'bold',
+              color: '#000000'
+            }}>
+      {t('platformTitle')}  {/* 使用国际化引用 */}
+    </span>
             {window.IS_ONLINE && (
               <Tag bordered={false} color="var(--color-fill-secondary)" style={{ color: 'var(--color-text)' }}>
                 Beta
