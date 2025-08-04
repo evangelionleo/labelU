@@ -623,15 +623,7 @@ const ImageAnnotation = () => {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // 绘制十字标记
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x - 10, y);
-        ctx.lineTo(x + 10, y);
-        ctx.moveTo(x, y - 10);
-        ctx.lineTo(x, y + 10);
-        ctx.stroke();
+        // 不绘制十字标记，只显示圆点
       });
     });
   }, [annotations, showMask, showBbox]);
