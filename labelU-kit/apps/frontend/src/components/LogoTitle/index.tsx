@@ -9,11 +9,16 @@ const Description = styled.span`
   color: var(--color-text-secondary);
 `;
 
+const LoginLogo = styled(Logo)`
+  width: 80px;
+  height: 30px;
+`;
+
 const LogoTitle = () => {
   const { t } = useTranslation();
   return (
     <FlexLayout flex="column" items="center" gap="1rem">
-      <Logo />
+      <LoginLogo />
       <Description>
         <div>{t('labelUDescription')}</div>
         <div>{t('labelUKeywords')}</div>

@@ -17,6 +17,12 @@ export default defineConfig({
   envDir: resolve(__dirname, 'env'),
   server: {
     host: '0.0.0.0',
+    allowedHosts: [
+      '72eaff08.r11.cpolar.top',
+      'localhost',
+      '127.0.0.1',
+      '0.0.0.0'
+    ],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

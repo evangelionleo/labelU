@@ -155,9 +155,23 @@ const ImageAnnotation = () => {
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  // API配置
-  const SAM2_API_URL = 'http://localhost:5000';  // SAM2手动分割API
-  const AUTO_ANNOTATE_API_URL = 'http://localhost:5001';  // 自动标注API
+  // API配置 - 动态获取当前域名和协议
+  const getBaseURL = () => {
+    const { protocol, hostname, port } = window.location;
+    
+    // 如果是开发环境的localhost，使用原始逻辑
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}`;
+    }
+    
+    // 如果是外网域名（如cpolar），使用当前域名
+    return `${protocol}//${hostname}`;
+  };
+  
+  const SAM2_API_URL = `${getBaseURL()}:5000`;  // SAM2手动分割API
+  const AUTO_ANNOTATE_API_URL = `${getBaseURL()}:5001`;  // 自动标注API
+  
+  console.log('API URLs:', { SAM2_API_URL, AUTO_ANNOTATE_API_URL });
   
   // 预定义的颜色
   const colors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'];
@@ -839,12 +853,12 @@ const ImageAnnotation = () => {
   return (
     <FlexLayout flex="column" padding="24px">
       <Title level={2} style={{ textAlign: 'center', marginBottom: '24px' }}>
-        SAM2 智能图像分割演示
+        智能图像标注演示
       </Title>
       
       <Alert
         message="双模式智能分割"
-        description="基于Meta SAM2模型的图像分割工具，支持两种标注模式：1) 手动标注：通过点击关键点进行精确分割；2) 智能标注：使用自然语言描述自动检测和分割对象。实时生成分割掩码和边界框，支持多对象标注。"
+        description="图像分割工具，支持两种标注模式：1) 手动标注：通过点击关键点进行精确分割；2) 智能标注：使用自然语言描述自动检测和分割对象。实时生成分割掩码和边界框，支持多对象标注。"
         type="info"
         showIcon
         style={{ marginBottom: '24px' }}
@@ -1140,7 +1154,7 @@ const ImageAnnotation = () => {
                   • Shift + 左键: 添加负向点（背景）<br/>
                   • 实时生成分割掩码和边界框<br/>
                   • 支持多对象分割标注<br/>
-                  • 后端服务: localhost:5000
+                  • 后端服务: {getBaseURL()}:5000
                 </Paragraph>
               ) : (
                 <Paragraph style={{ margin: 0, fontSize: '12px' }}>
@@ -1149,7 +1163,7 @@ const ImageAnnotation = () => {
                   • 调整检测阈值和文本阈值<br/>
                   • 点击"开始智能标注"自动检测对象<br/>
                   • 支持多对象同时检测<br/>
-                  • 后端服务: localhost:5001/api/auto_annotate
+                  • 后端服务: {getBaseURL()}:5001/api/auto_annotate
                 </Paragraph>
               )}
             </Card>
