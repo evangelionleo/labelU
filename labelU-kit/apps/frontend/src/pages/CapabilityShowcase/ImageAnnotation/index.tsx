@@ -252,18 +252,18 @@ const ImageAnnotation = () => {
       setIsSessionActive(true);
       setStatus('标注会话已启动，点击图片进行标注');
       
-      // 初始化第一个标注对象
-      if (annotations.length === 0) {
-        const newObjectId = nextObjectId;
-        setAnnotations([{
-          id: newObjectId,
-          points: [],
-          color: colors[(newObjectId - 1) % colors.length],
-          sessionId: sessionResult.session_id
-        }]);
-        setCurrentObject(newObjectId);
-        setNextObjectId(newObjectId + 1);
-      }
+      // 总是为手动标注创建一个新的对象
+      const newObjectId = nextObjectId;
+      setAnnotations(prev => [...prev, {
+        id: newObjectId,
+        points: [],
+        color: colors[(newObjectId - 1) % colors.length],
+        sessionId: sessionResult.session_id
+      }]);
+      setCurrentObject(newObjectId);
+      setNextObjectId(newObjectId + 1);
+      
+      console.log('手动标注会话启动，创建新对象:', newObjectId);
 
       message.success('标注会话启动成功！');
     } catch (error) {
@@ -324,9 +324,12 @@ const ImageAnnotation = () => {
         const updated = [...prev];
         const currentAnn = updated.find(ann => ann.id === currentObject);
         if (currentAnn) {
+          console.log('找到当前对象，添加点:', currentObject);
           currentAnn.points.push(newPoint);
           currentAnn.mask = result.mask;
           currentAnn.bbox = result.bbox;
+        } else {
+          console.error('未找到当前对象:', currentObject, '现有对象:', updated.map(a => a.id));
         }
         return updated;
       });
@@ -797,10 +800,9 @@ const ImageAnnotation = () => {
         // 更新全局ID计数器
         setNextObjectId(currentNextId + result.objects.length);
         
-        // 设置当前对象为第一个新添加的对象
-        if (autoAnnotations.length > 0) {
-          setCurrentObject(autoAnnotations[0].id);
-        }
+        // 智能标注完成后，不改变currentObject
+        // 让用户手动选择要操作的对象，或在手动标注时创建新对象
+        console.log('智能标注完成，添加了对象:', autoAnnotations.map(a => a.id));
         
         const detectionCount = result.detection_count || autoAnnotations.length;
         const processingTime = result.processing_time?.toFixed(2) || '0';
@@ -1105,12 +1107,20 @@ const ImageAnnotation = () => {
               <ControlPanel title="标注对象" size="small">
                 <Space direction="vertical" style={{ width: '100%' }} size="small">
                   {annotations.map(annotation => (
-                    <div key={annotation.id} style={{ 
-                      padding: '8px', 
-                      border: annotation.id === currentObject ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                      borderRadius: '4px',
-                      backgroundColor: annotation.id === currentObject ? '#f0f9ff' : '#fafafa'
-                    }}>
+                    <div 
+                      key={annotation.id} 
+                      style={{ 
+                        padding: '8px', 
+                        border: annotation.id === currentObject ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                        borderRadius: '4px',
+                        backgroundColor: annotation.id === currentObject ? '#f0f9ff' : '#fafafa',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        setCurrentObject(annotation.id);
+                        console.log('切换到对象:', annotation.id);
+                      }}
+                    >
                       <Space direction="vertical" size="small" style={{ width: '100%' }}>
                         <Space>
                           <Tag color={annotation.color}>对象 {annotation.id}</Tag>
