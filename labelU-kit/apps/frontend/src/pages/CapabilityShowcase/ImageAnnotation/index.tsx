@@ -866,8 +866,6 @@ const ImageAnnotation = () => {
         style={{ marginBottom: '16px' }}
       />
       
-
-
       <Row gutter={24}>
         {/* 主工作区 */}
         <Col span={16}>
