@@ -24,6 +24,16 @@ export default defineConfig({
       '0.0.0.0'
     ],
     proxy: {
+      '/api/sam2': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/sam2/, '/api'),
+      },
+      '/api/auto': {
+        target: 'http://127.0.0.1:5001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/auto/, '/api'),
+      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

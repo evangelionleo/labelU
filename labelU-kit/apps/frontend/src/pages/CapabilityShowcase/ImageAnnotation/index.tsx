@@ -159,17 +159,25 @@ const ImageAnnotation = () => {
   const getBaseURL = () => {
     const { protocol, hostname, port } = window.location;
     
-    // 如果是开发环境的localhost，使用原始逻辑
+    // 如果是开发环境的localhost，直接使用对应端口
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}`;
+      return {
+        sam2: `${protocol}//${hostname}:5000/api`,
+        autoAnnotate: `${protocol}//${hostname}:5001/api`
+      };
     }
     
-    // 如果是外网域名（如cpolar），使用当前域名
-    return `${protocol}//${hostname}`;
+    // 如果是外网域名（如cpolar），使用代理路径
+    const baseUrl = `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+    return {
+      sam2: `${baseUrl}/api/sam2`,        // 通过前端服务器代理
+      autoAnnotate: `${baseUrl}/api/auto`  // 通过前端服务器代理
+    };
   };
   
-  const SAM2_API_URL = `${getBaseURL()}:5000`;  // SAM2手动分割API
-  const AUTO_ANNOTATE_API_URL = `${getBaseURL()}:5001`;  // 自动标注API
+  const apiUrls = getBaseURL();
+  const SAM2_API_URL = apiUrls.sam2;  // SAM2手动分割API
+  const AUTO_ANNOTATE_API_URL = apiUrls.autoAnnotate;  // 自动标注API
   
   console.log('API URLs:', { SAM2_API_URL, AUTO_ANNOTATE_API_URL });
   
@@ -220,7 +228,7 @@ const ImageAnnotation = () => {
       const formData = new FormData();
       formData.append('file', currentImageFile);
 
-      const uploadResponse = await fetch(`${SAM2_API_URL}/api/upload`, {
+      const uploadResponse = await fetch(`${SAM2_API_URL}/upload`, {
         method: 'POST',
         body: formData
       });
@@ -233,7 +241,7 @@ const ImageAnnotation = () => {
       setStatus('图片上传成功，正在初始化分割会话...');
 
       // 开始分割会话
-      const sessionResponse = await fetch(`${SAM2_API_URL}/api/start_session`, {
+      const sessionResponse = await fetch(`${SAM2_API_URL}/start_session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -296,7 +304,7 @@ const ImageAnnotation = () => {
 
     try {
       // 调用后端API添加点并进行分割
-      const response = await fetch(`${SAM2_API_URL}/api/add_point`, {
+      const response = await fetch(`${SAM2_API_URL}/add_point`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -640,7 +648,7 @@ const ImageAnnotation = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${SAM2_API_URL}/api/clear_points`, {
+      const response = await fetch(`${SAM2_API_URL}/clear_points`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -680,7 +688,7 @@ const ImageAnnotation = () => {
     setLoading(true);
     try {
       // 清除当前会话的后端状态
-      await fetch(`${SAM2_API_URL}/api/clear_points`, {
+              await fetch(`${SAM2_API_URL}/clear_points`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -744,7 +752,7 @@ const ImageAnnotation = () => {
       formData.append('box_threshold', boxThreshold.toString());
       formData.append('text_threshold', textThreshold.toString());
 
-      const response = await fetch(`${AUTO_ANNOTATE_API_URL}/api/auto_annotate`, {
+      const response = await fetch(`${AUTO_ANNOTATE_API_URL}/auto_annotate`, {
         method: 'POST',
         body: formData
       });
@@ -854,6 +862,14 @@ const ImageAnnotation = () => {
         message="双模式智能分割"
         description="图像分割工具，支持两种标注模式：1) 手动标注：通过点击关键点进行精确分割；2) 智能标注：使用自然语言描述自动检测和分割对象。实时生成分割掩码和边界框，支持多对象标注。"
         type="info"
+        showIcon
+        style={{ marginBottom: '16px' }}
+      />
+      
+      <Alert
+        message="后端服务要求"
+        description="使用前请确保已启动后端服务：1) SAM2分割服务（端口5000）；2) 自动标注服务（端口5001）。如使用cpolar等内网穿透，API请求将通过前端服务器代理转发。"
+        type="warning"
         showIcon
         style={{ marginBottom: '24px' }}
       />
@@ -1156,7 +1172,7 @@ const ImageAnnotation = () => {
                   • Shift + 左键: 添加负向点（背景）<br/>
                   • 实时生成分割掩码和边界框<br/>
                   • 支持多对象分割标注<br/>
-                  • 后端服务: {getBaseURL()}:5000
+                  • 后端服务: {SAM2_API_URL}
                 </Paragraph>
               ) : (
                 <Paragraph style={{ margin: 0, fontSize: '12px' }}>
@@ -1165,7 +1181,7 @@ const ImageAnnotation = () => {
                   • 调整检测阈值和文本阈值<br/>
                   • 点击"开始智能标注"自动检测对象<br/>
                   • 支持多对象同时检测<br/>
-                  • 后端服务: {getBaseURL()}:5001/api/auto_annotate
+                  • 后端服务: {AUTO_ANNOTATE_API_URL}
                 </Paragraph>
               )}
             </Card>
