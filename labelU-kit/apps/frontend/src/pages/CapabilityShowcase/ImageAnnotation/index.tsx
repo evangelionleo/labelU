@@ -866,13 +866,7 @@ const ImageAnnotation = () => {
         style={{ marginBottom: '16px' }}
       />
       
-      <Alert
-        message="后端服务要求"
-        description="使用前请确保已启动后端服务：1) SAM2分割服务（端口5000）；2) 自动标注服务（端口5001）。如使用cpolar等内网穿透，API请求将通过前端服务器代理转发。"
-        type="warning"
-        showIcon
-        style={{ marginBottom: '24px' }}
-      />
+
 
       <Row gutter={24}>
         {/* 主工作区 */}
