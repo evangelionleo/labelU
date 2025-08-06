@@ -16,7 +16,8 @@ import {
   Switch,
   Input,
   Slider,
-  Tabs
+  Tabs,
+  Tooltip
 } from 'antd';
 import { 
   UploadOutlined, 
@@ -26,11 +27,14 @@ import {
   EyeOutlined,
   AimOutlined,
   SendOutlined,
-  BulbOutlined
+  BulbOutlined,
+  TranslationOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 // import { useTranslation } from '@labelu/i18n';
 import { FlexLayout } from '@labelu/components-react';
 import styled from 'styled-components';
+import { smartTranslate, detectLanguage, containsChinese } from '../../../utils/translation';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -151,6 +155,16 @@ const ImageAnnotation = () => {
   const [boxThreshold, setBoxThreshold] = useState(0.35);
   const [textThreshold, setTextThreshold] = useState(0.25);
   const [annotationMode, setAnnotationMode] = useState<'manual' | 'auto'>('manual');
+  
+  // 翻译相关状态
+  const [translatedPrompt, setTranslatedPrompt] = useState('');
+  const [isPreviewTranslating, setIsPreviewTranslating] = useState(false);
+  const [translationInfo, setTranslationInfo] = useState<{
+    originalText: string;
+    translatedText: string;
+    language: 'zh' | 'en';
+    wasTranslated: boolean;
+  } | null>(null);
   
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -640,6 +654,42 @@ const ImageAnnotation = () => {
     drawAnnotations();
   }, [annotations, drawAnnotations]);
 
+  // 防抖翻译效果（仅用于UI预览）
+  useEffect(() => {
+    if (!textPrompt.trim()) {
+      setTranslationInfo(null);
+      setTranslatedPrompt('');
+      setIsPreviewTranslating(false);
+      return;
+    }
+
+    // 只有包含中文时才进行预览翻译
+    if (!containsChinese(textPrompt)) {
+      setTranslationInfo(null);
+      setTranslatedPrompt('');
+      setIsPreviewTranslating(false);
+      return;
+    }
+
+    setIsPreviewTranslating(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const result = await smartTranslate(textPrompt);
+        setTranslationInfo(result);
+        setTranslatedPrompt(result.translatedText);
+      } catch (error) {
+        console.error('预览翻译失败:', error);
+      } finally {
+        setIsPreviewTranslating(false);
+      }
+    }, 1500); // 增加延时，减少不必要的翻译请求
+
+    return () => {
+      clearTimeout(timeoutId);
+      setIsPreviewTranslating(false);
+    };
+  }, [textPrompt]);
+
   const clearCurrentPoints = async () => {
     if (!currentSessionId) {
       message.warning('请先启动标注会话');
@@ -730,6 +780,8 @@ const ImageAnnotation = () => {
     setStatus('已重置所有标注，请重新开始');
   };
 
+
+
   // 自然语言自动标注
   const performAutoAnnotation = async () => {
     if (!currentImageFile) {
@@ -743,12 +795,43 @@ const ImageAnnotation = () => {
     }
 
     setLoading(true);
-    setStatus('正在进行自动标注...');
+    setStatus('正在进行翻译和自动标注...');
 
     try {
+      // 先进行翻译处理，直接获取翻译结果
+      let promptToUse = textPrompt.trim();
+      
+      if (containsChinese(textPrompt)) {
+        console.log('检测到中文，开始翻译:', textPrompt);
+        setStatus('正在翻译中文...');
+        
+        try {
+          const translationResult = await smartTranslate(textPrompt);
+          promptToUse = translationResult.translatedText;
+          
+          // 更新翻译状态
+          setTranslationInfo(translationResult);
+          setTranslatedPrompt(translationResult.translatedText);
+          
+          if (translationResult.wasTranslated) {
+            console.log('翻译完成:', translationResult.originalText, '->', translationResult.translatedText);
+            message.success(`已翻译为英文：${translationResult.translatedText}`);
+          }
+        } catch (translationError) {
+          console.error('翻译失败:', translationError);
+          message.warning('翻译失败，使用原文进行标注');
+        }
+      }
+      
+      setStatus('正在进行自动标注...');
+      
+      // 确保最终文本以英文句号结尾（AI检测必需）
+      const finalPrompt = promptToUse.trim().endsWith('.') ? promptToUse.trim() : promptToUse.trim() + '.';
+      console.log('最终使用的提示文本:', finalPrompt);
+      
       const formData = new FormData();
       formData.append('image', currentImageFile);
-      formData.append('text_prompt', textPrompt.trim());
+      formData.append('text_prompt', finalPrompt);
       formData.append('box_threshold', boxThreshold.toString());
       formData.append('text_threshold', textThreshold.toString());
 
@@ -960,15 +1043,62 @@ const ImageAnnotation = () => {
                   {/* 自然语言标注控制 */}
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <div>
-                      <Text style={{ fontSize: '12px', color: '#666' }}>描述要检测的对象：</Text>
-                      <TextArea
-                        rows={3}
-                        value={textPrompt}
-                        onChange={(e) => setTextPrompt(e.target.value)}
-                        placeholder="例如：person. car. dog. building.
-注意：多个对象用英文句号分隔"
-                        style={{ marginTop: '4px' }}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                        <Text style={{ fontSize: '12px', color: '#666' }}>描述要检测的对象：</Text>
+                        <Tooltip title="支持中英文输入，中文将自动翻译为英文。系统会自动添加英文句号以确保AI检测正常工作">
+                          <InfoCircleOutlined style={{ marginLeft: '4px', color: '#1890ff' }} />
+                        </Tooltip>
+                      </div>
+                      <div style={{ position: 'relative' }}>
+                        <TextArea
+                          rows={3}
+                          value={textPrompt}
+                          onChange={(e) => setTextPrompt(e.target.value)}
+                          placeholder="例如：人物 汽车 狗 建筑物
+或英文：person car dog building
+注意：多个对象用空格或句号分隔，系统会自动添加英文句号"
+                          style={{ marginTop: '4px' }}
+                        />
+                        {/* 翻译状态图标 */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '8px', 
+                          right: '8px', 
+                          zIndex: 10 
+                        }}>
+                          {isPreviewTranslating ? (
+                            <Tooltip title="正在翻译...">
+                              <TranslationOutlined spin style={{ color: '#1890ff' }} />
+                            </Tooltip>
+                          ) : containsChinese(textPrompt) ? (
+                            <Tooltip title="检测到中文，将自动翻译">
+                              <TranslationOutlined style={{ color: '#52c41a' }} />
+                            </Tooltip>
+                          ) : null}
+                        </div>
+                      </div>
+                      
+                      {/* 翻译信息显示 */}
+                      {translationInfo && translationInfo.wasTranslated && (
+                        <Alert
+                          message={
+                            <div>
+                              <Text style={{ fontSize: '12px' }}>
+                                <span style={{ color: '#666' }}>原文：</span>
+                                <span>{translationInfo.originalText}</span>
+                              </Text>
+                              <br />
+                              <Text style={{ fontSize: '12px' }}>
+                                <span style={{ color: '#666' }}>英文：</span>
+                                <span style={{ color: '#1890ff' }}>{translationInfo.translatedText}</span>
+                              </Text>
+                            </div>
+                          }
+                          type="info"
+                          showIcon
+                          style={{ marginTop: '8px', fontSize: '12px' }}
+                        />
+                      )}
                     </div>
                     
                     <div>
