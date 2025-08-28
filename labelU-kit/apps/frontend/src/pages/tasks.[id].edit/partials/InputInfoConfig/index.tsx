@@ -51,6 +51,10 @@ const InputInfoConfig = () => {
                     label: t('audio'),
                     value: MediaType.AUDIO,
                   },
+                  {
+                    label: t('text'),
+                    value: MediaType.TEXT,
+                  },
                 ]}
               />
             </Form.Item>

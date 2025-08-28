@@ -8,6 +8,7 @@ import { useSearchParams, useParams, useRouteLoaderData } from 'react-router-dom
 import { Bridge } from 'iframe-message-bridge';
 import type { ImageAnnotatorProps, AnnotatorRef as ImageAnnotatorRef } from '@labelu/image-annotator-react';
 import { Annotator as ImageAnnotator } from '@labelu/image-annotator-react';
+import TextAnnotation from './TextAnnotation';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { FlexLayout } from '@labelu/components-react';
 import type { ToolName } from '@labelu/image';
@@ -369,6 +370,10 @@ const AnnotationPage = () => {
         preAnnotationLabels={preAnnotationConfig}
         preAnnotations={sample.data.state === SampleState.NEW ? preAnnotations : undefined}
       />
+    );
+  } else if (task?.media_type === MediaType.TEXT) {
+    content = (
+      <TextAnnotation />
     );
   }
 

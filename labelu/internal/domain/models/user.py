@@ -19,3 +19,5 @@ class User(Base):
         DateTime(timezone=True), default=datetime.now, comment="Last time a task was updated"
     )
     tasks = relationship("Task", secondary="task_collaborator", back_populates="collaborators")
+    points = relationship("UserPoints", back_populates="user", uselist=False)
+    points_history = relationship("PointsHistory", back_populates="user")

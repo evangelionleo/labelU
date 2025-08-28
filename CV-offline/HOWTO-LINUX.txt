@@ -1,0 +1,10 @@
+Offline install (Linux)
+=======================
+1) Ensure Python version matches the wheels (same major.minor as build machine)
+2) Create venv and activate:
+   python3 -m venv .venv
+   source .venv/bin/activate
+3) Install offline deps:
+   pip install --no-index --find-links=./wheels-linux -r requirements.linux.txt
+4) Start backend:
+   python -m uvicorn labelu.main:app --host 0.0.0.0 --port 8000

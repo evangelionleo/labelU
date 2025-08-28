@@ -28,6 +28,7 @@ class MediaType(str, Enum):
     IMAGE = "IMAGE"
     VIDEO = "VIDEO"
     AUDIO = "AUDIO"
+    TEXT = "TEXT"
 
 
 class Task(Base):
