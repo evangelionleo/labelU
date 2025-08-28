@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 import { Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { FlexLayout } from '@labelu/components-react';
+import { Layout } from 'antd';
 
 import Navigate from '@/components/Navigate';
+import Sidebar from '@/components/Sidebar';
 
 const LayoutWrapper = styled(FlexLayout)`
   min-height: 100vh;
@@ -11,6 +13,16 @@ const LayoutWrapper = styled(FlexLayout)`
 
 const MainContent = styled(FlexLayout.Content)`
   background-color: #f4f5f7;
+`;
+
+const StyledLayout = styled(Layout)`
+  min-height: 100vh;
+`;
+
+const ContentWrapper = styled(Layout.Content)`
+  background-color: #f4f5f7;
+  margin: 0;
+  padding: 0;
 `;
 
 const MainLayout = () => {
@@ -32,16 +44,19 @@ const MainLayout = () => {
   }, [navigate]);
 
   return (
-    <LayoutWrapper flex="column">
+    <StyledLayout>
       {!isPreview && (
         <FlexLayout.Header>
           <Navigate />
         </FlexLayout.Header>
       )}
-      <MainContent flex="column">
-        <Outlet />
-      </MainContent>
-    </LayoutWrapper>
+      <Layout>
+        <Sidebar />
+        <ContentWrapper>
+          <Outlet />
+        </ContentWrapper>
+      </Layout>
+    </StyledLayout>
   );
 };
 export default MainLayout;

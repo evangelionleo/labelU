@@ -11,6 +11,11 @@ import Samples from '@/pages/tasks.[id]';
 import TaskSamplesFinished from '@/pages/tasks.[id].samples.finished';
 import Page404 from '@/pages/404';
 import MainLayout from '@/layouts/MainLayoutWithNavigation';
+import Dashboard from '@/pages/dashboard';
+import PreAnnotation from '@/pages/pre-annotation';
+import Users from '@/pages/users';
+import Teams from '@/pages/teams';
+import Reports from '@/pages/reports';
 
 import type { TaskLoaderResult } from './loaders/task.loader';
 import { taskLoader, tasksLoader } from './loaders/task.loader';
@@ -28,9 +33,9 @@ function Root() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 如果是根路径，跳转到任务管理（以任务管理为首页）
+    // 如果是根路径，跳转到仪表板（以仪表板为首页）
     if (location.pathname === '/' || location.pathname === '') {
-      navigate('/tasks');
+      navigate('/dashboard');
     }
   }, [location.pathname, navigate]);
 
@@ -53,6 +58,91 @@ const routes: RouteObject[] = [
     loader: rootLoader,
     children: [
       {
+        path: 'dashboard',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'dashboard',
+        handle: {
+          crumb: () => {
+            return i18n.t('dashboard');
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <Dashboard />,
+          },
+        ],
+      },
+      {
+        path: 'pre-annotation',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'pre-annotation',
+        handle: {
+          crumb: () => {
+            return '预标注任务';
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <PreAnnotation />,
+          },
+        ],
+      },
+      {
+        path: 'users',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'users',
+        handle: {
+          crumb: () => {
+            return '用户管理';
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <Users />,
+          },
+        ],
+      },
+      {
+        path: 'teams',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'teams',
+        handle: {
+          crumb: () => {
+            return '团队管理';
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <Teams />,
+          },
+        ],
+      },
+      {
+        path: 'reports',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'reports',
+        handle: {
+          crumb: () => {
+            return '报表中心';
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <Reports />,
+          },
+        ],
+      },
+      {
         path: 'tasks',
         element: <MainLayout />,
         errorElement: <Page404 />,
@@ -60,7 +150,7 @@ const routes: RouteObject[] = [
         loader: tasksLoader,
         handle: {
           crumb: () => {
-            return i18n.t('taskList');
+            return '任务大厅';
           },
         },
         children: [

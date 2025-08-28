@@ -171,7 +171,6 @@ export enum MediaType {
   IMAGE = 'IMAGE',
   VIDEO = 'VIDEO',
   AUDIO = 'AUDIO',
-  TEXT = 'TEXT',
   // TODO: 后续支持
   // POINT_CLOUD = 'POINT_CLOUD',
 }
