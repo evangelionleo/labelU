@@ -372,7 +372,7 @@ const AnnotationPage = () => {
     setClickAnnotationActive(prev => {
       const newState = !prev;
       if (newState) {
-        message.info('点击标注已激活，图片将被恢复到原始大小和位置');
+        message.info('点击标注已激活，图片将被恢复到适应容器的大小和位置');
       } else {
         message.info('点击标注已关闭');
       }

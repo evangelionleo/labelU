@@ -292,11 +292,19 @@ function ForwardAnnotator(
         
         // 恢复图片到原始大小和位置
         try {
-          engine.resetScale();
-          engine.center();
-          console.log('已恢复图片到原始大小和位置');
+          // 使用fit方法将图片适应到容器大小
+          engine.fit();
+          console.log('已恢复图片到适应容器大小');
         } catch (error) {
           console.log('恢复图片大小和位置失败:', error);
+          // 备用方法
+          try {
+            engine.resetScale();
+            engine.center();
+            console.log('使用备用方法恢复图片');
+          } catch (resetError) {
+            console.log('所有恢复方法都失败:', resetError);
+          }
         }
         
         // 通过修改配置来禁用交互
