@@ -289,6 +289,16 @@ function ForwardAnnotator(
       // 在点击标注激活时禁用缩放和拖拽
       if (clickAnnotationActive) {
         console.log('点击标注激活，禁用图片缩放和拖拽');
+        
+        // 恢复图片到原始大小和位置
+        try {
+          engine.resetScale();
+          engine.center();
+          console.log('已恢复图片到原始大小和位置');
+        } catch (error) {
+          console.log('恢复图片大小和位置失败:', error);
+        }
+        
         // 通过修改配置来禁用交互
         engine.config.editable = false;
         // 可以尝试禁用鼠标事件

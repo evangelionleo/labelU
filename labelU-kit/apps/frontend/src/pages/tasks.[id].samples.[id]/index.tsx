@@ -369,10 +369,18 @@ const AnnotationPage = () => {
 
   const handleClickAnnotationClick = useCallback(() => {
     console.log('点击标注按钮被点击');
-    setClickAnnotationActive(!clickAnnotationActive);
-    setSmartAnnotationActive(false); // 关闭智能标注
-    setCurrentTool(clickAnnotationActive ? undefined : 'clickAnnotation');
-  }, [clickAnnotationActive]);
+    setClickAnnotationActive(prev => {
+      const newState = !prev;
+      if (newState) {
+        message.info('点击标注已激活，图片将被恢复到原始大小和位置');
+      } else {
+        message.info('点击标注已关闭');
+      }
+      return newState;
+    });
+    // 确保智能标注关闭
+    setSmartAnnotationActive(false);
+  }, []);
 
   const handleAddClickAnnotationPoint = useCallback((point: {id: number; x: number; y: number; type: 'positive' | 'negative'}) => {
     console.log('添加点击标注点:', point);

@@ -82,7 +82,7 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
       <Space direction="vertical" style={{ width: '100%' }} size="small">
         <Alert
           message="点击标注功能"
-          description="在图片上直接点击添加积极点（正向标注）或消极点（负向标注）。按住Shift键点击添加消极点。在点击标注模式下，图片将被固定，不允许缩放和拖拽。"
+          description="在图片上直接点击添加积极点（正向标注）或消极点（负向标注）。按住Shift键点击添加消极点。在点击标注模式下，图片将被恢复到原始大小和位置，并固定不允许缩放和拖拽。"
           type="info"
           showIcon
           icon={<InfoCircleOutlined />}
@@ -178,7 +178,8 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
             <li>积极点表示要包含的区域</li>
             <li>消极点表示要排除的区域</li>
             <li>可以添加多个点来精确标注</li>
-            <li>在点击标注模式下，图片将被固定，不允许缩放和拖拽</li>
+            <li>在点击标注模式下，图片将被恢复到原始大小和位置</li>
+            <li>图片将被固定，不允许缩放和拖拽</li>
             <li>点击"清除当前对象点"清除当前对象的点</li>
             <li>点击"下一个对象"保存当前对象并创建新对象</li>
             <li>点击"重置所有"清除所有点并结束会话</li>
