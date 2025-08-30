@@ -98,6 +98,7 @@ const AnnotationContainer = styled.div`
   flex: 1;
   width: auto !important;
   height: auto !important;
+  position: relative;
 `;
 
 export type { ImageAnnotatorOptions } from './hooks/useImageAnnotator';
@@ -132,6 +133,11 @@ export interface ImageAnnotatorProps {
   primaryColor?: string;
   toolbarExtra?: React.ReactNode;
   toolbarRight?: React.ReactNode;
+  smartAnnotationActive?: boolean;
+  onSmartAnnotationClick?: () => void;
+  clickAnnotationActive?: boolean;
+  onClickAnnotationClick?: () => void;
+  onImageClick?: (e: React.MouseEvent) => void;
 
   onError?: (error: { type: string; message: string; value?: any }) => void;
 
@@ -176,6 +182,11 @@ function ForwardAnnotator(
     primaryColor = '#007aff',
     toolbarExtra,
     toolbarRight,
+    smartAnnotationActive,
+    onSmartAnnotationClick,
+    clickAnnotationActive,
+    onClickAnnotationClick,
+    onImageClick,
     preAnnotationLabels,
     preAnnotations,
     requestEdit,
@@ -268,11 +279,36 @@ function ForwardAnnotator(
 
   const engine = useImageAnnotator(containerRef, annotationOptions);
 
+  // 添加调试信息
+  console.log('ImageAnnotator - 当前工具:', currentTool);
+
   useEffect(() => {
     if (engine?.config) {
       engine.setEditable(!disabled);
+      
+      // 在点击标注激活时禁用缩放和拖拽
+      if (clickAnnotationActive) {
+        console.log('点击标注激活，禁用图片缩放和拖拽');
+        // 通过修改配置来禁用交互
+        engine.config.editable = false;
+        // 可以尝试禁用鼠标事件
+        const canvas = engine.renderer?.canvas;
+        if (canvas) {
+          canvas.style.pointerEvents = 'none';
+          console.log('已禁用canvas的鼠标事件');
+        }
+      } else {
+        console.log('点击标注未激活，恢复图片交互');
+        // 恢复交互
+        engine.config.editable = !disabled;
+        const canvas = engine.renderer?.canvas;
+        if (canvas) {
+          canvas.style.pointerEvents = 'auto';
+          console.log('已恢复canvas的鼠标事件');
+        }
+      }
     }
-  }, [engine, disabled]);
+  }, [engine, disabled, clickAnnotationActive]);
 
   const [orderVisible, setOrderVisible] = useState<boolean>(true);
 
@@ -946,9 +982,13 @@ function ForwardAnnotator(
     };
   }, [currentSample, onSampleSelect, samples]);
 
+  // 智能标注功能已集成到面板中，不再需要额外的点击处理
+
   const attributeSide = useMemo(() => {
+    console.log('attributeSide - currentTool:', currentTool);
+    
     return typeof renderAttributes === 'function' ? renderAttributes() : <AttributePanel />;
-  }, [renderAttributes]);
+  }, [renderAttributes, currentTool]);
 
   return (
     <SampleContext.Provider value={sampleContextValue}>
@@ -957,12 +997,26 @@ function ForwardAnnotator(
           <HistoryContext.Provider value={historyContextValue}>
             {/* @ts-ignore */}
             <Wrapper style={{ '--color-primary': primaryColor, '--offset-top': `${offsetTop}px` }}>
-              <AnnotatorToolbar extra={toolbarExtra} right={toolbarRight} />
+              <AnnotatorToolbar 
+                extra={toolbarExtra} 
+                right={toolbarRight}
+                smartAnnotationActive={smartAnnotationActive}
+                onSmartAnnotationClick={onSmartAnnotationClick}
+                clickAnnotationActive={clickAnnotationActive}
+                onClickAnnotationClick={onClickAnnotationClick}
+              />
               <LabelSection />
               <Content>
                 <Sidebar renderSidebar={renderSidebar} />
                 <ContentMid>
-                  <AnnotationContainer ref={containerRef} />
+                  <AnnotationContainer 
+                    ref={containerRef} 
+                    onClick={onImageClick}
+                    style={{ 
+                      cursor: clickAnnotationActive ? 'crosshair' : 'default',
+                      pointerEvents: clickAnnotationActive ? 'auto' : 'auto'
+                    }}
+                  />
                   <Footer />
                 </ContentMid>
                 {attributeSide}

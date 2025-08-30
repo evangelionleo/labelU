@@ -10,6 +10,8 @@ export enum ImageToolName {
   Cuboid = 'cuboidTool',
   /** 关联关系 */
   Relation = 'relationTool',
+  /** 智能标注工具 */
+  SmartAnnotation = 'smartAnnotationTool',
 }
 
 export enum EVideoToolName {

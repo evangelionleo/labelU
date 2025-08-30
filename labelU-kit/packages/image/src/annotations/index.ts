@@ -4,6 +4,7 @@ import { AnnotationPoint } from './Point.annotation';
 import { AnnotationPolygon } from './Polygon.annotation';
 import { AnnotationRect } from './Rect.annotation';
 import { AnnotationRelation } from './Relation.annotation';
+import { SmartAnnotationAnnotation } from './SmartAnnotation.annotation';
 
 export * from './Cuboid.annotation';
 export * from './Polygon.annotation';
@@ -12,6 +13,7 @@ export * from './Line.annotation';
 export * from './Point.annotation';
 export * from './Annotation';
 export * from './Relation.annotation';
+export * from './SmartAnnotation.annotation';
 
 export const AnnotationMapping = {
   cuboid: AnnotationCuboid,
@@ -20,4 +22,5 @@ export const AnnotationMapping = {
   line: AnnotationLine,
   point: AnnotationPoint,
   relation: AnnotationRelation,
+  smartAnnotation: SmartAnnotationAnnotation,
 };

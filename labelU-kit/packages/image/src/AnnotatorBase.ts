@@ -18,6 +18,7 @@ import { createConfig } from './singletons/annotationConfig';
 import type { AnnotatorOptions } from './core/AnnotatorConfig';
 // import { relationManager } from './singletons/relationManager';
 import { RelationTool } from './tools/Relation.tool';
+import { SmartAnnotationTool } from './tools/SmartAnnotation.tool';
 
 const ToolMapping = {
   line: LineTool,
@@ -26,6 +27,7 @@ const ToolMapping = {
   polygon: PolygonTool,
   cuboid: CuboidTool,
   relation: RelationTool,
+  smartAnnotation: SmartAnnotationTool,
 } as const;
 
 export class AnnotatorBase {
@@ -117,6 +119,7 @@ export class AnnotatorBase {
 
   private _initialTools() {
     const { config } = this;
+    console.log('AnnotatorBase._initialTools - 配置:', config);
 
     if (config.strokeWidth) {
       Annotation.strokeWidth = config.strokeWidth;
@@ -131,7 +134,9 @@ export class AnnotatorBase {
     }
 
     TOOL_NAMES.forEach((toolName) => {
+      console.log(`检查工具 ${toolName}:`, config[toolName]);
       if (config[toolName]) {
+        console.log(`创建工具 ${toolName}`);
         const ToolClass = ToolMapping[toolName];
         this.use(
           ToolClass.create({
@@ -141,17 +146,21 @@ export class AnnotatorBase {
             getTools: () => this.tools,
           }),
         );
+      } else {
+        console.log(`工具 ${toolName} 配置不存在，跳过创建`);
       }
     });
   }
 
   public use(instance: AnnotationTool) {
     const { tools } = this;
+    console.log(`注册工具: ${instance.name}`);
     if (tools.has(instance.name)) {
       throw new Error(`Tool ${instance.name} already exists!`);
     }
 
     tools.set(instance.name, instance);
+    console.log(`工具 ${instance.name} 注册成功，当前工具列表:`, Array.from(tools.keys()));
 
     return this;
   }

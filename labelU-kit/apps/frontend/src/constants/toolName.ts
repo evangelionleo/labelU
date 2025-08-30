@@ -11,6 +11,7 @@ export const TOOL_NAME: Record<string, string> = {
   [ImageToolName.Cuboid]: i18n.t('cuboid'),
   [ImageToolName.Line]: i18n.t('line'),
   [ImageToolName.Relation]: i18n.t('relation'),
+  [ImageToolName.SmartAnnotation]: '智能标注',
   [EVideoToolName.VideoSegmentTool]: i18n.t('segment'),
   [EVideoToolName.VideoFrameTool]: i18n.t('timestamp'),
   [EAudioToolName.AudioSegmentTool]: i18n.t('segment'),

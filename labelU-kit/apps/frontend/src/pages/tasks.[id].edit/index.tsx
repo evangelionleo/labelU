@@ -225,6 +225,15 @@ const CreateTask = () => {
       const annotationConfig = annotationFormInstance.getFieldsValue();
       const emptyType = isContainEmptyOption(annotationConfig);
 
+      // 调试信息：检查智能标注工具是否在配置中
+      console.log('保存前的任务配置:', annotationConfig);
+      const smartAnnotationTool = annotationConfig?.tools?.find((tool: any) => tool.tool === 'smartAnnotationTool');
+      if (smartAnnotationTool) {
+        console.log('智能标注工具配置:', smartAnnotationTool);
+      } else {
+        console.log('智能标注工具未找到，当前工具列表:', annotationConfig?.tools?.map((t: any) => t.tool));
+      }
+
       if (emptyType === 'attribute') {
         commonController.notificationErrorMessage({ message: t('mustHaveAtLeastOneAttribute') }, 2);
         return;

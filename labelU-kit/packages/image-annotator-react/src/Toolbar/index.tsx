@@ -11,6 +11,7 @@ import { ReactComponent as RectIcon } from '@/assets/tools/rect.svg';
 import { ReactComponent as PolygonIcon } from '@/assets/tools/polygon.svg';
 import { ReactComponent as CuboidIcon } from '@/assets/tools/cuboid.svg';
 import { ReactComponent as RelationIcon } from '@/assets/tools/relation.svg';
+import { ReactComponent as SmartAnnotationIcon } from '@/assets/tools/smartAnnotation.svg';
 import { useTool } from '@/context/tool.context';
 import { useAnnotationCtx } from '@/context/annotation.context';
 import { useHistoryCtx } from '@/context/history.context';
@@ -18,6 +19,7 @@ import { dragModalRef } from '@/LabelSection';
 
 import ToolStyle from './ToolStyle';
 import hotkeysConst from './hotkeys.const';
+import { AimOutlined } from '@ant-design/icons';
 
 const ToolbarWrapper = styled(Toolbar)`
   color: rgba(0, 0, 0, 0.6);
@@ -35,6 +37,10 @@ const iconMapping = {
 export interface IToolbarInEditorProps {
   extra?: React.ReactNode;
   right?: React.ReactNode;
+  smartAnnotationActive?: boolean;
+  onSmartAnnotationClick?: () => void;
+  clickAnnotationActive?: boolean;
+  onClickAnnotationClick?: () => void;
 }
 
 export const tooltipStyle = {
@@ -49,7 +55,7 @@ const ToolStyleWrapper = styled.div`
   color: #333;
 `;
 
-export function AnnotatorToolbar({ right }: IToolbarInEditorProps) {
+export function AnnotatorToolbar({ right, smartAnnotationActive, onSmartAnnotationClick, clickAnnotationActive, onClickAnnotationClick }: IToolbarInEditorProps) {
   const { engine, currentTool, tools, memorizeToolLabel } = useTool();
   const { onOrderVisibleChange, orderVisible } = useAnnotationCtx();
   const { redo, undo, futureRef, pastRef } = useHistoryCtx();
@@ -93,7 +99,7 @@ export function AnnotatorToolbar({ right }: IToolbarInEditorProps) {
       onUndo={undo}
       tools={
         <>
-          {tools.map((tool) => {
+          {tools.filter(tool => tool !== 'smartAnnotation' as any).map((tool) => {
             return (
               <Tooltip key={tool} overlay={<span>{toolNameTextMapping[tool]}</span>} placement="topLeft">
                 <Toolbar.Item active={currentTool === tool} onClick={handleToolChange(tool)}>
@@ -102,6 +108,22 @@ export function AnnotatorToolbar({ right }: IToolbarInEditorProps) {
               </Tooltip>
             );
           })}
+          {/* 智能标注按钮 */}
+          {smartAnnotationActive !== undefined && onSmartAnnotationClick && (
+            <Tooltip overlay={<span>智能标注</span>} placement="topLeft">
+              <Toolbar.Item active={smartAnnotationActive} onClick={onSmartAnnotationClick}>
+                <SmartAnnotationIcon />
+              </Toolbar.Item>
+            </Tooltip>
+          )}
+          {/* 点击标注按钮 */}
+          {clickAnnotationActive !== undefined && onClickAnnotationClick && (
+            <Tooltip overlay={<span>点击标注</span>} placement="topLeft">
+              <Toolbar.Item active={clickAnnotationActive} onClick={onClickAnnotationClick}>
+                <AimOutlined />
+              </Toolbar.Item>
+            </Tooltip>
+          )}
           <Tooltip overlayStyle={tooltipStyle} overlay={<ToolStyle />} placement="bottomLeft">
             <ToolStyleWrapper>{t('toolStyle')}</ToolStyleWrapper>
           </Tooltip>

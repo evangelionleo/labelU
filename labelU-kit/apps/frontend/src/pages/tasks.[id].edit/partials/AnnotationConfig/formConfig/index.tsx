@@ -29,6 +29,7 @@ import videoSegmentTemplate from './templates/videoSegment.template';
 import videoFrameTemplate from './templates/videoFrame.template';
 import audioSegmentTemplate from './templates/audioSegment.template';
 import audioFrameTemplate from './templates/audioFrame.template';
+import smartAnnotationTemplate from './templates/smartAnnotation.template';
 import { AttributeBox, AttributeFormItem, ConfigForm, TabForm } from './style';
 
 const GlobalStyle = createGlobalStyle`
@@ -49,6 +50,7 @@ const graphicTools = [
   ImageToolName.Line,
   ImageToolName.Cuboid,
   ImageToolName.Relation,
+  ImageToolName.SmartAnnotation,
 ];
 const videoAnnotationTools = [EVideoToolName.VideoSegmentTool, EVideoToolName.VideoFrameTool];
 const audioAnnotationTools = [EAudioToolName.AudioSegmentTool, EAudioToolName.AudioFrameTool];
@@ -94,6 +96,7 @@ const templateMapping: Record<string, any> = {
   [ImageToolName.Point]: pointTemplate,
   [ImageToolName.Cuboid]: cuboidTemplate,
   [ImageToolName.Relation]: relationTemplate,
+  [ImageToolName.SmartAnnotation]: smartAnnotationTemplate,
   [EGlobalToolName.Tag]: tagTemplate,
   [EGlobalToolName.Text]: textTemplate,
   [EVideoToolName.VideoSegmentTool]: videoSegmentTemplate,
@@ -174,6 +177,47 @@ const FormConfig = () => {
     } else {
       setActiveTool(key);
       setSelectedAnnotationTools((pre) => [...pre, key]);
+    }
+
+    // 初始化新添加工具的表单数据
+    const currentValues = annotationFormInstance.getFieldsValue();
+    const tools = currentValues.tools || [];
+    
+    // 检查工具是否已经存在
+    const existingTool = tools.find((tool: any) => tool.tool === key);
+    if (!existingTool) {
+      // 获取工具的默认模板
+      const template = templateMapping[key];
+      if (template) {
+        const defaultConfig = {
+          tool: key,
+          config: {
+            enabled: true,
+            labels: [],
+            boxThreshold: 0.35,
+            textThreshold: 0.25,
+            syncRectLabels: true,
+          }
+        };
+        
+        // 如果是智能标注工具，尝试同步拉框标签
+        if (key === ImageToolName.SmartAnnotation) {
+          const rectTool = tools.find((tool: any) => tool.tool === 'rectTool');
+          if (rectTool?.config?.attributes) {
+            defaultConfig.config.labels = rectTool.config.attributes;
+          }
+          // 确保工具名称正确
+          defaultConfig.tool = 'smartAnnotationTool';
+        }
+        
+        tools.push(defaultConfig);
+        
+        // 更新表单数据
+        annotationFormInstance.setFieldsValue({
+          ...currentValues,
+          tools: tools,
+        });
+      }
     }
 
     if (typeof onAnnotationFormChange === 'function') {
@@ -335,6 +379,55 @@ const FormConfig = () => {
     },
     [annotationFormInstance],
   );
+
+  // 自动同步拉框标签到智能标注工具
+  const syncRectLabelsToSmartAnnotation = useCallback(() => {
+    if (!task?.config?.tools) return;
+
+    const rectTool = task.config.tools.find(tool => tool.tool === 'rectTool');
+    const smartAnnotationTool = task.config.tools.find(tool => tool.tool === 'smartAnnotationTool');
+
+    if (rectTool && smartAnnotationTool && rectTool.config?.attributes) {
+      // 同步拉框工具的标签到智能标注工具
+      smartAnnotationTool.config = {
+        ...smartAnnotationTool.config,
+        attributes: rectTool.config.attributes
+      };
+
+      // 因为antd的form的特殊性，删除数组元素时，需要手动调用setFieldsValue
+      const prevValues = cloneDeep(annotationFormInstance.getFieldsValue());
+
+      setTimeout(() => {
+        annotationFormInstance.setFieldsValue({
+          ...prevValues,
+          tools: prevValues.tools.map(item => {
+            if (item.tool === 'smartAnnotationTool') {
+              return {
+                ...item,
+                config: {
+                  ...item.config,
+                  attributes: rectTool.config.attributes
+                }
+              };
+            }
+            return item;
+          })
+        });
+      });
+    }
+  }, [task, annotationFormInstance]);
+
+  // 监听拉框工具的变化，自动同步标签
+  useEffect(() => {
+    if (task?.config?.tools) {
+      const hasRectTool = task.config.tools.some(tool => tool.tool === 'rectTool');
+      const hasSmartAnnotationTool = task.config.tools.some(tool => tool.tool === 'smartAnnotationTool');
+      
+      if (hasRectTool && hasSmartAnnotationTool) {
+        syncRectLabelsToSmartAnnotation();
+      }
+    }
+  }, [task?.config?.tools, syncRectLabelsToSmartAnnotation]);
 
   // ========================= end ==============================
 

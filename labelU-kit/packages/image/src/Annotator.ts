@@ -158,6 +158,9 @@ export class Annotator extends AnnotatorBase {
    * @param label 标注类别，如果是字符串，则表示标注类别value（唯一标示）；如果是对象，则表示标注类别
    */
   public switch(toolName: ToolName, label?: string) {
+    console.log(`尝试切换到工具: ${toolName}`);
+    console.log(`当前可用工具:`, Array.from(this.tools.keys()));
+    
     if (typeof toolName !== 'string') {
       console.error('toolName must be string, such as "line" or "point"');
 
@@ -174,6 +177,7 @@ export class Annotator extends AnnotatorBase {
     if (!tool) {
       // TODO：导向到文档
       console.warn(`Tool ${toolName} is not used!`);
+      console.warn(`可用工具列表:`, Array.from(this.tools.keys()));
 
       return;
     }

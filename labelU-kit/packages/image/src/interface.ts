@@ -9,6 +9,7 @@ import type {
   RectData,
   RectGroup,
   RelationData,
+  SmartAnnotationData,
 } from './annotations';
 import type { ClosedSpline, Line, Point, Polygon, Rect, Spline } from './shapes';
 import type {
@@ -24,6 +25,8 @@ import type {
   RectToolOptions,
   RelationTool,
   RelationToolOptions,
+  SmartAnnotationTool,
+  SmartAnnotationConfig,
 } from './tools';
 
 export type EditType = 'create' | 'update' | 'delete';
@@ -77,24 +80,26 @@ export type ToolOptions =
   | RectToolOptions
   | PolygonToolOptions
   | CuboidToolOptions
-  | RelationToolOptions;
+  | RelationToolOptions
+  | SmartAnnotationConfig;
 
 export type { LineData };
 
-export type AnnotationData = LineData | PointData | RectData | PolygonData | CuboidData | RelationData;
+export type AnnotationData = LineData | PointData | RectData | PolygonData | CuboidData | RelationData | SmartAnnotationData;
 
 export type AllTypeAnnotationDataGroup = CuboidData[] &
   PolygonData[] &
   RectData[] &
   PointData[] &
   LineData[] &
-  RelationData[];
+  RelationData[] &
+  SmartAnnotationData[];
 
-export type AnnotationTool = LineTool | PointTool | RectTool | PolygonTool | CuboidTool | RelationTool;
+export type AnnotationTool = LineTool | PointTool | RectTool | PolygonTool | CuboidTool | RelationTool | SmartAnnotationTool;
 
 export type AnnotationShape = Line | Point | Rect | Polygon | Spline | ClosedSpline;
 
-export type ToolName = 'line' | 'point' | 'polygon' | 'rect' | 'cuboid' | 'relation';
+export type ToolName = 'line' | 'point' | 'polygon' | 'rect' | 'cuboid' | 'relation' | 'smartAnnotation';
 
 export type AnnotationToolData<T extends ToolName> = T extends 'line'
   ? LineData[]
@@ -108,6 +113,8 @@ export type AnnotationToolData<T extends ToolName> = T extends 'line'
   ? CuboidData[]
   : T extends 'relation'
   ? RelationData[]
+  : T extends 'smartAnnotation'
+  ? SmartAnnotationData[]
   : never;
 
 export type AnyTool = Map<ToolName, AnnotationTool>;
