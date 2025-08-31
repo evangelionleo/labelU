@@ -42,38 +42,33 @@ const ButtonGroup = styled.div`
   width: 100%;
 `;
 
-interface Point {
-  id: number;
-  x: number;
-  y: number;
-  type: 'positive' | 'negative';
-}
-
 interface ClickAnnotationPanelProps {
-  points: Point[];
-  onAddPoint?: (point: Point) => void;
-  onRemovePoint?: (pointId: number) => void;
-  onClearPoints?: () => void;
-  onStartAnnotation?: () => void;
-  onClearCurrentObject?: () => void;
-  onResetAll?: () => void;
-  onNextObject?: () => void;
-  disabled?: boolean;
-  isAnnotationActive?: boolean;
+  points: Array<{id: number; x: number; y: number; type: 'positive' | 'negative'}>;
+  sessionActive: boolean;
+  loading: boolean;
+  onAddPositivePoint: (x: number, y: number, type: 'positive') => void;
+  onAddNegativePoint: (x: number, y: number, type: 'negative') => void;
+  onClearPoints: () => void;
+  onStartAnnotation: () => void;
+  onClearCurrentObject: () => void;
+  onResetAll: () => void;
+  onNextObject: () => void;
+  disabled: boolean;
 }
 
-const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
+export default function ClickAnnotationPanel({
   points,
-  onAddPoint,
-  onRemovePoint,
+  sessionActive,
+  loading,
+  onAddPositivePoint,
+  onAddNegativePoint,
   onClearPoints,
   onStartAnnotation,
   onClearCurrentObject,
   onResetAll,
   onNextObject,
-  disabled = false,
-  isAnnotationActive = false,
-}) => {
+  disabled
+}: ClickAnnotationPanelProps) {
     const positivePoints = points.filter(p => p.type === 'positive');
     const negativePoints = points.filter(p => p.type === 'negative');
 
@@ -96,24 +91,27 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
             <Button
               type="primary"
               onClick={onStartAnnotation}
-              disabled={disabled || isAnnotationActive}
+              disabled={disabled || sessionActive || loading}
+              loading={loading}
               style={{ width: '100%' }}
             >
-              {isAnnotationActive ? '标注会话已启动' : '开始标注'}
+              {sessionActive ? '标注会话已启动' : '开始标注'}
             </Button>
             
             {/* 第二行：管理按钮 */}
             <ButtonRow>
               <Button
                 onClick={onClearCurrentObject}
-                disabled={disabled || points.length === 0}
+                disabled={disabled || !sessionActive || loading}
+                loading={loading}
                 style={{ flex: 1 }}
               >
                 清除当前对象点
               </Button>
               <Button
                 onClick={onNextObject}
-                disabled={disabled || !isAnnotationActive}
+                disabled={disabled || !sessionActive || loading}
+                loading={loading}
                 style={{ flex: 1 }}
               >
                 下一个对象
@@ -122,9 +120,10 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
             
             {/* 第三行：重置按钮 */}
             <Button
-              danger
               onClick={onResetAll}
-              disabled={disabled}
+              danger
+              disabled={disabled || loading}
+              loading={loading}
               style={{ width: '100%' }}
             >
               重置所有
@@ -155,14 +154,7 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
                     </Tag>
                     <Text>坐标: ({point.x.toFixed(1)}, {point.y.toFixed(1)})</Text>
                   </div>
-                  <Button
-                    size="small"
-                    danger
-                    onClick={() => onRemovePoint?.(point.id)}
-                    disabled={disabled}
-                  >
-                    删除
-                  </Button>
+                  {/* The onRemovePoint prop was removed from the interface, so this button is removed */}
                 </PointItem>
               ))}
             </PointList>
@@ -189,5 +181,3 @@ const ClickAnnotationPanel: React.FC<ClickAnnotationPanelProps> = ({
     </PanelWrapper>
   );
 };
-
-export default ClickAnnotationPanel;
