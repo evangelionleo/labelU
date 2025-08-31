@@ -354,10 +354,33 @@ const AnnotationPage = () => {
   const [currentObjectPoints, setCurrentObjectPoints] = useState<Array<{id: number; x: number; y: number; type: 'positive' | 'negative'}>>([]);
   const [currentObjectId, setCurrentObjectId] = useState<number>(1);
 
+  // 获取当前选中的标签
+  const getCurrentLabel = useCallback(() => {
+    // 优先使用当前工具的标签
+    if (currentTool && labelMapping && labelMapping[currentTool]) {
+      return labelMapping[currentTool];
+    }
+    
+    // 如果没有当前工具的标签，使用rect工具的默认标签
+    if (labelMapping && labelMapping['rect']) {
+      return labelMapping['rect'];
+    }
+    
+    // 如果都没有，使用配置中的第一个标签
+    if (config?.rect?.labels && config.rect.labels.length > 0) {
+      return config.rect.labels[0].value;
+    }
+    
+    // 最后的默认值
+    return 'click_annotation';
+  }, [currentTool, labelMapping, config]);
+
   const handleLabelChange = useCallback((toolName: any, label: ILabel) => {
     if (!label) {
       return;
     }
+
+    console.log('标签变更:', toolName, label.value);
 
     // 缓存当前标签
     setLabelMapping((prev) => {
@@ -527,6 +550,7 @@ const AnnotationPage = () => {
         console.log('图片尺寸:', { width: imageWidth, height: imageHeight });
         console.log('边界框:', result.bbox);
         console.log('掩码:', result.mask);
+        console.log('当前选中的标签:', getCurrentLabel());
 
         // 转换结果为拉框数据
         const rectData = convertMaskToRectData(
@@ -534,13 +558,14 @@ const AnnotationPage = () => {
           result.bbox,
           imageWidth,
           imageHeight,
-          'click_annotation'
+          getCurrentLabel() // 使用当前选中的标签
         );
 
         console.log('=== 转换后的拉框数据 ===');
         console.log('转换后的rectData:', rectData);
         console.log('rectData类型:', typeof rectData);
         console.log('rectData属性:', Object.keys(rectData));
+        console.log('rectData的标签:', rectData.label);
         console.log('x, y, width, height:', {
           x: rectData.x,
           y: rectData.y,
@@ -612,7 +637,7 @@ const AnnotationPage = () => {
     } finally {
       setClickAnnotationLoading(false);
     }
-  }, [clickAnnotationSession, clickAnnotationSessionActive, sample?.data?.data?.result, imageAnnotationRef.current?.getEngine, currentObjectPoints]);
+  }, [clickAnnotationSession, clickAnnotationSessionActive, sample?.data?.data?.result, imageAnnotationRef.current?.getEngine, currentObjectPoints, getCurrentLabel]);
 
   // 清除当前对象的点击点
   const handleClearCurrentClickPoints = useCallback(async () => {
