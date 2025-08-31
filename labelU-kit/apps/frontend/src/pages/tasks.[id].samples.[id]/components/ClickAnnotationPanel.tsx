@@ -44,6 +44,8 @@ const ButtonGroup = styled.div`
 
 interface ClickAnnotationPanelProps {
   points: Array<{id: number; x: number; y: number; type: 'positive' | 'negative'}>;
+  currentObjectPoints: Array<{id: number; x: number; y: number; type: 'positive' | 'negative'}>;
+  currentObjectId: number;
   sessionActive: boolean;
   loading: boolean;
   onAddPositivePoint: (x: number, y: number, type: 'positive') => void;
@@ -56,8 +58,10 @@ interface ClickAnnotationPanelProps {
   disabled: boolean;
 }
 
-export default function ClickAnnotationPanel({
+export function ClickAnnotationPanel({
   points,
+  currentObjectPoints,
+  currentObjectId,
   sessionActive,
   loading,
   onAddPositivePoint,
@@ -69,115 +73,94 @@ export default function ClickAnnotationPanel({
   onNextObject,
   disabled
 }: ClickAnnotationPanelProps) {
-    const positivePoints = points.filter(p => p.type === 'positive');
-    const negativePoints = points.filter(p => p.type === 'negative');
-
   return (
-    <PanelWrapper title={<><AimOutlined /> 点击标注</>}>
-      <Space direction="vertical" style={{ width: '100%' }} size="small">
-        <Alert
-          message="点击标注功能"
-          description="在图片上直接点击添加积极点（正向标注）或消极点（负向标注）。按住Shift键点击添加消极点。在点击标注模式下，图片将被恢复到适应容器的大小和位置，并固定不允许缩放和拖拽。"
-          type="info"
-          showIcon
-          icon={<InfoCircleOutlined />}
-          style={{ marginBottom: '8px' }}
-        />
+    <PanelWrapper>
+      <Alert
+        message="点击标注模式"
+        description={`当前对象: ${currentObjectId} | 当前对象点击点: ${currentObjectPoints.length} | 总点击点: ${points.length}`}
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+      />
 
-        <div>
-          <Title level={5} style={{ marginBottom: '12px' }}>操作按钮</Title>
-          <ButtonGroup>
-            {/* 第一行：开始标注 */}
-            <Button
-              type="primary"
-              onClick={onStartAnnotation}
-              disabled={disabled || sessionActive || loading}
-              loading={loading}
-              style={{ width: '100%' }}
-            >
-              {sessionActive ? '标注会话已启动' : '开始标注'}
-            </Button>
-            
-            {/* 第二行：管理按钮 */}
-            <ButtonRow>
-              <Button
-                onClick={onClearCurrentObject}
-                disabled={disabled || !sessionActive || loading}
-                loading={loading}
-                style={{ flex: 1 }}
-              >
-                清除当前对象点
-              </Button>
-              <Button
-                onClick={onNextObject}
-                disabled={disabled || !sessionActive || loading}
-                loading={loading}
-                style={{ flex: 1 }}
-              >
-                下一个对象
-              </Button>
-            </ButtonRow>
-            
-            {/* 第三行：重置按钮 */}
-            <Button
-              onClick={onResetAll}
-              danger
-              disabled={disabled || loading}
-              loading={loading}
-              style={{ width: '100%' }}
-            >
-              重置所有
-            </Button>
-          </ButtonGroup>
-        </div>
+      <ButtonGroup>
+        <Button
+          type="primary"
+          onClick={onStartAnnotation}
+          loading={loading}
+          disabled={disabled || sessionActive}
+          style={{ width: '100%', marginBottom: 8 }}
+        >
+          开始标注
+        </Button>
 
-        <Divider style={{ margin: '16px 0' }} />
+        <ButtonRow>
+          <Button
+            onClick={onClearCurrentObject}
+            loading={loading}
+            disabled={disabled || !sessionActive}
+            style={{ flex: 1, marginRight: 4 }}
+          >
+            清除当前对象点
+          </Button>
+          <Button
+            onClick={onNextObject}
+            disabled={disabled || !sessionActive}
+            style={{ flex: 1, marginLeft: 4 }}
+          >
+            下一个对象
+          </Button>
+        </ButtonRow>
 
-        <div>
-          <Title level={5} style={{ marginBottom: '8px' }}>标注统计</Title>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Tag color="green" style={{ margin: 0 }}>积极点: {positivePoints.length}</Tag>
-            <Tag color="red" style={{ margin: 0 }}>消极点: {negativePoints.length}</Tag>
-            <Tag color="blue" style={{ margin: 0 }}>总计: {points.length}</Tag>
-          </div>
-        </div>
+        <Button
+          onClick={onResetAll}
+          loading={loading}
+          disabled={disabled || !sessionActive}
+          style={{ width: '100%', marginTop: 8 }}
+        >
+          重置所有
+        </Button>
+      </ButtonGroup>
 
-        {points.length > 0 && (
-          <div>
-            <Title level={5} style={{ marginBottom: '8px' }}>已添加的点</Title>
-            <PointList>
-              {points.map(point => (
-                <PointItem key={point.id}>
-                  <div>
-                    <Tag color={point.type === 'positive' ? 'green' : 'red'}>
-                      {point.type === 'positive' ? '积极' : '消极'}
-                    </Tag>
-                    <Text>坐标: ({point.x.toFixed(1)}, {point.y.toFixed(1)})</Text>
-                  </div>
-                  {/* The onRemovePoint prop was removed from the interface, so this button is removed */}
-                </PointItem>
-              ))}
-            </PointList>
-          </div>
-        )}
+      <Divider />
 
-        <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
-          <Title level={5} style={{ marginBottom: '8px' }}>使用说明：</Title>
-          <ul style={{ margin: '0', paddingLeft: '16px', lineHeight: '1.5' }}>
-            <li>点击"开始标注"启动标注会话</li>
-            <li>在图片上直接点击添加积极点（正向标注）</li>
-            <li>按住Shift键在图片上点击添加消极点（负向标注）</li>
-            <li>积极点表示要包含的区域</li>
-            <li>消极点表示要排除的区域</li>
-            <li>可以添加多个点来精确标注</li>
-            <li>在点击标注模式下，图片将被恢复到适应容器的大小和位置</li>
-            <li>图片将被固定，不允许缩放和拖拽</li>
-            <li>点击"清除当前对象点"清除当前对象的点</li>
-            <li>点击"下一个对象"保存当前对象并创建新对象</li>
-            <li>点击"重置所有"清除所有点并结束会话</li>
+      <div>
+        <h4>标注统计</h4>
+        <p>当前对象: {currentObjectId}</p>
+        <p>当前对象点击点: {currentObjectPoints.length}</p>
+        <p>总点击点: {points.length}</p>
+      </div>
+
+      <Divider />
+
+      <div>
+        <h4>当前对象点击点</h4>
+        {currentObjectPoints.length === 0 ? (
+          <p style={{ color: '#999' }}>暂无点击点</p>
+        ) : (
+          <ul style={{ paddingLeft: 16 }}>
+            {currentObjectPoints.map((point) => (
+              <li key={point.id}>
+                {point.type === 'positive' ? '🟢' : '🔴'} 
+                ({point.x.toFixed(1)}%, {point.y.toFixed(1)}%)
+              </li>
+            ))}
           </ul>
-        </div>
-      </Space>
+        )}
+      </div>
+
+      <Divider />
+
+      <div>
+        <h4>使用说明</h4>
+        <ul style={{ paddingLeft: 16, fontSize: 12, color: '#666' }}>
+          <li>点击"开始标注"启动会话</li>
+          <li>在图片上直接点击添加积极点</li>
+          <li>按住Shift+点击添加消极点</li>
+          <li>点击"下一个对象"切换到新对象</li>
+          <li>每个对象只记录自己的点击点</li>
+        </ul>
+      </div>
     </PanelWrapper>
   );
-};
+}
