@@ -31,7 +31,6 @@ import AnnotationRightCorner from './components/annotationRightCorner';
 import AnnotationContext from './annotation.context';
 import { LoadingWrapper, Wrapper } from './style';
 import useSampleWs from '../../hooks/useSampleWs';
-import SmartAnnotationDebug from './components/SmartAnnotationDebug';
 import SmartAnnotationPanel from './components/SmartAnnotationPanel';
 import { ClickAnnotationPanel } from './components/ClickAnnotationPanel';
 
@@ -353,6 +352,7 @@ const AnnotationPage = () => {
   // 新增：当前对象的点击点状态
   const [currentObjectPoints, setCurrentObjectPoints] = useState<Array<{id: number; x: number; y: number; type: 'positive' | 'negative'}>>([]);
   const [currentObjectId, setCurrentObjectId] = useState<number>(1);
+  const [clickPointIdCounter, setClickPointIdCounter] = useState<number>(1); // 添加点击点ID计数器
 
   // 获取当前选中的标签
   const getCurrentLabel = useCallback(() => {
@@ -558,7 +558,8 @@ const AnnotationPage = () => {
       await clearClickPoints(clickAnnotationSession.sessionId);
 
       // 将当前对象的所有点击点（包括新点击的点）发送到后端
-      const allCurrentPoints = [...currentObjectPoints, { id: Date.now(), x, y, type }];
+      const allCurrentPoints = [...currentObjectPoints, { id: clickPointIdCounter, x, y, type }];
+      setClickPointIdCounter(prev => prev + 1); // 增加计数器
       console.log('当前对象的所有点击点:', allCurrentPoints);
 
       // 逐个发送当前对象的所有点击点
@@ -610,85 +611,88 @@ const AnnotationPage = () => {
           height: rectData.height
         });
 
-        // 将拉框数据添加到标注引擎
-        if (imageAnnotationRef.current?.getEngine()) {
-          try {
-            const engine = imageAnnotationRef.current.getEngine();
-            if (!engine) {
-              console.error('无法获取引擎实例');
-              return;
-            }
-
-            // 获取当前已有的rect标注数据
-            const currentData = engine.getDataByTool();
-            console.log('当前引擎数据:', currentData);
-            const currentRectData = currentData?.rect || [];
-            console.log('当前rect数据:', currentRectData);
-
-            // 检查rect工具是否已初始化，如果没有则初始化
-            if (!currentData?.rect) {
-              console.log('rect工具未初始化，尝试初始化...');
-              // 尝试初始化rect工具
-              try {
-                engine.loadData('rect', []);
-                console.log('rect工具初始化成功');
-              } catch (initError) {
-                console.error('rect工具初始化失败:', initError);
-                message.error('rect工具初始化失败，请确保任务配置中包含拉框工具');
+        // 只在最后一个点击点时生成边界框
+        if (point === allCurrentPoints[allCurrentPoints.length - 1]) {
+          // 将拉框数据添加到标注引擎
+          if (imageAnnotationRef.current?.getEngine()) {
+            try {
+              const engine = imageAnnotationRef.current.getEngine();
+              if (!engine) {
+                console.error('无法获取引擎实例');
                 return;
               }
-            }
 
-            // Filter out previous click_annotation rects to only show the latest one for the current object
-            const otherRects = currentRectData.filter((rect: any) =>
-              !rect.id?.startsWith('click_annotation_')
-            );
+              // 获取当前已有的rect标注数据
+              const currentData = engine.getDataByTool();
+              console.log('当前引擎数据:', currentData);
+              const currentRectData = currentData?.rect || [];
+              console.log('当前rect数据:', currentRectData);
 
-            // 添加新的标注数据 (only the latest one from the loop)
-            const updatedRectData = [...otherRects, rectData];
-            console.log('更新后的rect数据:', updatedRectData);
-
-            // 通过引擎的loadData方法添加标注
-            engine.loadData('rect', updatedRectData);
-
-            // 验证数据是否成功添加
-            const afterData = engine.getDataByTool();
-            console.log('添加后的引擎数据:', afterData);
-            console.log('添加后的rect数据:', afterData?.rect);
-
-            console.log('成功添加拉框数据到引擎:', rectData);
-            console.log('当前所有rect标注:', updatedRectData);
-
-            // 触发标注数据更新，确保在标签列表中显示
-            // 模拟一个标注完成事件，让系统知道有新的标注数据
-            setTimeout(() => {
-              try {
-                // 触发引擎的重新渲染
-                engine.render();
-                console.log('已触发引擎重新渲染');
-                
-                // 触发标注数据变更事件，确保标签列表更新
-                handleAnnotationChange(rectData);
-                console.log('已触发标注数据变更事件');
-                
-                // 直接触发引擎的add事件，确保数据能够正确持久化
-                // 这是关键：模拟Tool.onAdd事件，让系统知道有新的标注数据
-                engine.emit('add', [rectData]);
-                console.log('已触发引擎add事件');
-                
-              } catch (renderError) {
-                console.error('重新渲染失败:', renderError);
+              // 检查rect工具是否已初始化，如果没有则初始化
+              if (!currentData?.rect) {
+                console.log('rect工具未初始化，尝试初始化...');
+                // 尝试初始化rect工具
+                try {
+                  engine.loadData('rect', []);
+                  console.log('rect工具初始化成功');
+                } catch (initError) {
+                  console.error('rect工具初始化失败:', initError);
+                  message.error('rect工具初始化失败，请确保任务配置中包含拉框工具');
+                  return;
+                }
               }
-            }, 100);
 
+              // Filter out previous click_annotation rects to only show the latest one for the current object
+              const otherRects = currentRectData.filter((rect: any) =>
+                !rect.id?.startsWith('click_annotation_')
+              );
+
+              // 添加新的标注数据 (only the latest one from the loop)
+              const updatedRectData = [...otherRects, rectData];
+              console.log('更新后的rect数据:', updatedRectData);
+
+              // 通过引擎的loadData方法添加标注
+              engine.loadData('rect', updatedRectData);
+
+              // 验证数据是否成功添加
+              const afterData = engine.getDataByTool();
+              console.log('添加后的引擎数据:', afterData);
+              console.log('添加后的rect数据:', afterData?.rect);
+
+              console.log('成功添加拉框数据到引擎:', rectData);
+              console.log('当前所有rect标注:', updatedRectData);
+
+              // 触发标注数据更新，确保在标签列表中显示
+              // 模拟一个标注完成事件，让系统知道有新的标注数据
+              setTimeout(() => {
+                try {
+                  // 触发引擎的重新渲染
+                  engine.render();
+                  console.log('已触发引擎重新渲染');
+                  
+                  // 触发标注数据变更事件，确保标签列表更新
+                  handleAnnotationChange(rectData);
+                  console.log('已触发标注数据变更事件');
+                  
+                  // 直接触发引擎的add事件，确保数据能够正确持久化
+                  // 这是关键：模拟Tool.onAdd事件，让系统知道有新的标注数据
+                  engine.emit('add', [rectData]);
+                  console.log('已触发引擎add事件');
+                  
+                } catch (renderError) {
+                  console.error('重新渲染失败:', renderError);
+                }
+              }, 100);
+
+              message.success(`点击点添加成功，生成了边界框: (${rectData.x}, ${rectData.y}, ${rectData.width}x${rectData.height})`);
+            } catch (error) {
+              console.error('添加标注到引擎失败:', error);
+              message.error('添加标注到引擎失败');
+            }
+          } else {
+            console.log('生成的拉框数据:', rectData);
             message.success(`点击点添加成功，生成了边界框: (${rectData.x}, ${rectData.y}, ${rectData.width}x${rectData.height})`);
-          } catch (error) {
-            console.error('添加标注到引擎失败:', error);
-            message.error('添加标注到引擎失败');
           }
-        } else {
-          console.log('生成的拉框数据:', rectData);
-          message.success(`点击点添加成功，生成了边界框: (${rectData.x}, ${rectData.y}, ${rectData.width}x${rectData.height})`);
         }
       }
 
@@ -701,7 +705,7 @@ const AnnotationPage = () => {
     } finally {
       setClickAnnotationLoading(false);
     }
-  }, [clickAnnotationSession, clickAnnotationSessionActive, sample?.data?.data?.result, imageAnnotationRef.current?.getEngine, currentObjectPoints, getCurrentLabel, handleAnnotationChange]);
+  }, [clickAnnotationSession, clickAnnotationSessionActive, sample?.data?.data?.result, imageAnnotationRef.current?.getEngine, currentObjectPoints, getCurrentLabel, handleAnnotationChange, clickPointIdCounter]);
 
   // 清除当前对象的点击点
   const handleClearCurrentClickPoints = useCallback(async () => {
@@ -739,36 +743,16 @@ const AnnotationPage = () => {
   }, [clickAnnotationSession, clickAnnotationSessionActive, currentObjectPoints]);
 
   // 重置所有点击标注
-  const handleResetClickAnnotation = useCallback(async () => {
-    if (!clickAnnotationSession || !clickAnnotationSessionActive) {
-      message.error('请先启动点击标注会话');
-      return;
-    }
-
-    try {
-      setClickAnnotationLoading(true);
-      message.loading('正在重置所有点击标注...', 0);
-
-      // 清除后端会话中的点击点
-      await clearClickPoints(clickAnnotationSession.sessionId);
-
-      // 清除所有点击点
-      setClickAnnotationPoints([]);
-      setCurrentObjectPoints([]);
-      setCurrentObjectId(1);
-
-      message.destroy();
-      message.success('所有点击标注重置成功！');
-      console.log('所有点击标注重置成功');
-
-    } catch (error) {
-      message.destroy();
-      message.error(`重置点击标注失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      console.error('重置点击标注失败:', error);
-    } finally {
-      setClickAnnotationLoading(false);
-    }
-  }, [clickAnnotationSession, clickAnnotationSessionActive]);
+  const handleResetClickAnnotation = useCallback(() => {
+    setClickAnnotationPoints([]);
+    setCurrentObjectPoints([]);
+    setCurrentObjectId(1);
+    setClickPointIdCounter(1); // 重置计数器
+    setClickAnnotationSessionActive(false);
+    setClickAnnotationSession(null);
+    setCurrentImageFile(null);
+    message.success('点击标注已重置');
+  }, []);
 
   // 下一个对象
   const handleNextClickAnnotationObject = useCallback(() => {
@@ -812,11 +796,12 @@ const AnnotationPage = () => {
     
     // 添加点击点到当前对象
     const newPoint = {
-      id: Date.now(),
+      id: clickPointIdCounter, // 使用计数器生成ID
       x: x,
       y: y,
       type: type
     };
+    setClickPointIdCounter(prev => prev + 1); // 增加计数器
     
     // 更新当前对象的点击点
     setCurrentObjectPoints(prev => [...prev, newPoint]);
@@ -826,74 +811,80 @@ const AnnotationPage = () => {
     
     // 调用API处理当前对象的点击点
     handleAddClickPoint(x, y, type);
-  }, [clickAnnotationActive, clickAnnotationSessionActive, handleAddClickPoint]);
+  }, [clickAnnotationActive, clickAnnotationSessionActive, handleAddClickPoint, clickPointIdCounter]);
 
-  // 在图片上绘制点击点的函数
-  const drawClickPoints = useCallback(() => {
-    if (!imageAnnotationRef.current?.getEngine()) {
-      return;
+  // 临时绘制点击点的函数
+  const drawTemporaryClickPoints = useCallback(() => {
+    // 查找标注容器
+    const container = document.querySelector('.annotation-container') as HTMLElement;
+    if (!container) return;
+
+    // 创建或获取临时canvas
+    let canvas = document.getElementById('temp-click-points') as HTMLCanvasElement;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'temp-click-points';
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.zIndex = '1000';
+      container.appendChild(canvas);
     }
 
-    const engine = imageAnnotationRef.current.getEngine();
-    if (!engine) {
-      return;
-    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // 获取当前point数据
-    const currentData = engine.getDataByTool();
-    const currentPointData = currentData?.point || [];
-    
-    // 检查point工具是否已初始化，如果没有则初始化
-    if (!currentData?.point) {
-      console.log('point工具未初始化，尝试初始化...');
-      try {
-        engine.loadData('point', []);
-        console.log('point工具初始化成功');
-      } catch (initError) {
-        console.error('point工具初始化失败:', initError);
-        return;
-      }
-    }
-    
-    // 过滤掉之前的点击点，保留其他点
-    const otherPoints = currentPointData.filter((point: any) => 
-      !point.id?.startsWith('click_point_')
-    );
-    
-    // 创建新的点击点数据
-    const clickPointData = clickAnnotationPoints.map((point, index) => ({
-      id: `click_point_${point.id}`,
-      x: point.x,
-      y: point.y,
-      radius: 8, // 点的大小
-      order: index,
-      label: point.type === 'positive' ? 'positive' : 'negative',
-      visible: true,
-      valid: true,
-      attributes: {
-        type: point.type,
-        source: 'click_annotation_point'
-      }
-    }));
+    // 设置canvas尺寸
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
 
-    // 合并所有点数据
-    const allPointData = [...otherPoints, ...clickPointData];
+    // 清除canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 重新加载point数据
-    try {
-      engine.loadData('point', allPointData);
-      console.log('成功绘制点击点:', clickPointData.length, '个点');
-    } catch (error) {
-      console.error('绘制点击点失败:', error);
+    // 绘制当前对象的点击点
+    currentObjectPoints.forEach((point) => {
+      // 将百分比坐标转换为canvas坐标
+      const x = (point.x / 100) * canvas.width;
+      const y = (point.y / 100) * canvas.height;
+
+      // 绘制点击点
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = point.type === 'positive' ? '#52c41a' : '#ff4d4f';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 绘制十字标记
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x + 8, y);
+      ctx.moveTo(x, y - 8);
+      ctx.lineTo(x, y + 8);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+  }, [currentObjectPoints]);
+
+  // 清除临时点击点的函数
+  const clearTemporaryClickPoints = useCallback(() => {
+    const canvas = document.getElementById('temp-click-points') as HTMLCanvasElement;
+    if (canvas) {
+      canvas.remove();
     }
-  }, [clickAnnotationPoints]);
+  }, []);
 
   // 当点击点变化时重新绘制
   useEffect(() => {
     if (clickAnnotationActive && clickAnnotationSessionActive) {
-      drawClickPoints();
+      drawTemporaryClickPoints();
+    } else {
+      clearTemporaryClickPoints();
     }
-  }, [clickAnnotationPoints, clickAnnotationActive, clickAnnotationSessionActive, drawClickPoints]);
+  }, [clickAnnotationPoints, clickAnnotationActive, clickAnnotationSessionActive, drawTemporaryClickPoints, clearTemporaryClickPoints]);
 
   const handleSmartAnnotationTrigger = useCallback(async (textPrompt: string, boxThreshold: number, textThreshold: number) => {
     console.log('触发智能标注:', { textPrompt, boxThreshold, textThreshold });
@@ -926,12 +917,6 @@ const AnnotationPage = () => {
   if (task?.media_type === MediaType.IMAGE) {
     content = (
       <>
-        <SmartAnnotationDebug
-          smartAnnotationActive={smartAnnotationActive}
-          onToggleSmartAnnotation={handleSmartAnnotationClick}
-        />
-
-
         {/* 智能标注面板 */}
         {smartAnnotationActive && (
           <div style={{ 

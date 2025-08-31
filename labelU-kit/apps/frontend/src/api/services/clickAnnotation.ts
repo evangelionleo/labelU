@@ -36,6 +36,9 @@ export interface ClickAnnotationResult {
   totalPoints: number;
 }
 
+// 添加一个全局计数器用于生成顺序ID
+let clickAnnotationIdCounter = 1;
+
 // 第一步：与后端通信 - 启动点击标注会话
 export async function startClickAnnotationSession(imageFile: File): Promise<ClickAnnotationSession> {
   try {
@@ -205,12 +208,12 @@ export function convertMaskToRectData(
   
   // 将掩码的边界框转换为拉框数据
   const rectData: RectData = {
-    id: `click_annotation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `click_annotation_${clickAnnotationIdCounter++}`, // 使用简单的顺序ID
     x: bboxObj.x,
     y: bboxObj.y,
     width: bboxObj.width,
     height: bboxObj.height,
-    order: Date.now(), // 使用时间戳作为顺序
+    order: clickAnnotationIdCounter, // 使用顺序ID作为order
     label: label,
     visible: true,
     valid: true,
