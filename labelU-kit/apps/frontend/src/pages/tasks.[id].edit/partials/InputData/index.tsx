@@ -436,6 +436,11 @@ const InputData = () => {
                 {t('fileTypeSupportsInclude')}
                 {FileExtensionText[task.media_type!]}
               </div>
+              {task.media_type === MediaType.TEXT && (
+                <div style={{ color: '#666', fontSize: 12, textAlign: 'center', marginTop: '0.5rem' }}>
+                  支持PDF、Word文档、图片等格式，系统将自动提取文本内容用于问答对生成
+                </div>
+              )}
             </ButtonWrapper>
           </UploadArea>
           <h4>{t('preAnnotationFileUpload')}</h4>
