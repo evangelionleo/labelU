@@ -53,6 +53,10 @@ const StyledFooter = styled.div`
 `;
 
 function isContainEmptyOption(config: ToolsConfigState) {
+  if (!config || !config.tools || !Array.isArray(config.tools)) {
+    return false;
+  }
+  
   for (const tool of config.tools) {
     const attributes = tool.config?.attributes ?? [];
 
@@ -81,6 +85,7 @@ function isContainEmptyOption(config: ToolsConfigState) {
       }
     }
   }
+  return false;
 }
 
 interface TaskStep extends StepData {
@@ -500,6 +505,22 @@ const CreateTask = () => {
         return;
       }
 
+      // 如果是从标注配置步骤到下一步，检查是否包含问答对生成工具
+      if (currentStep === StepEnum.Config) {
+        const annotationConfig = annotationFormInstance.getFieldsValue();
+        const hasQAGenerationTool = annotationConfig.tools?.some((tool: any) => tool.tool === 'qaGenerationTool');
+        
+        if (hasQAGenerationTool) {
+          // 如果有问答对生成工具，先保存配置然后跳转到专门的标注页面
+          submitForm()
+            .then(() => {
+              navigate(`/qa-generation-annotator/${taskId}`);
+            })
+            .catch(() => {});
+          return;
+        }
+      }
+
       submitForm()
         .then(() => {
           updateCurrentStep((nextStep as TaskStep).value);
@@ -517,6 +538,9 @@ const CreateTask = () => {
       updateCurrentStep,
       uploadFileList,
       t,
+      annotationFormInstance,
+      taskId,
+      navigate,
     ],
   );
 

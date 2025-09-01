@@ -74,6 +74,11 @@ const Samples = () => {
     revalidator.revalidate();
   };
 
+  // 检查是否包含问答对生成工具
+  const hasQAGenerationTool = useMemo(() => {
+    return task?.config?.tools?.some((tool: any) => tool.tool === 'qaGenerationTool');
+  }, [task?.config?.tools]);
+
   const columns: ColumnsType<SampleResponse | PreAnnotationFileResponse> = [
     {
       title: t('innerId'),
@@ -102,12 +107,13 @@ const Samples = () => {
         return formatter.format('ellipsis', _filename, { maxWidth: 160, type: 'tooltip' });
       },
     },
-    {
+    // 只有在不是问答对生成任务时才显示数据预览列
+    ...(hasQAGenerationTool ? [] : [{
       title: t('dataPreview'),
       dataIndex: 'file',
       key: 'file',
-      align: 'left',
-      render: (data, record) => {
+      align: 'left' as const,
+      render: (data: any, record: any) => {
         if ((record as PreAnnotationFileResponse).sample_names) {
           return '-';
         }
@@ -121,7 +127,7 @@ const Samples = () => {
           return <VideoCard size={{ width: 116, height: 70 }} src={data?.url} showPlayIcon showDuration />;
         }
       },
-    },
+    }]),
     {
       title: (
         <>
