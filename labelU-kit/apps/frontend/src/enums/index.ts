@@ -31,4 +31,5 @@ export enum EAudioToolName {
 export enum EGlobalToolName {
   Tag = 'tagTool',
   Text = 'textTool',
+  QAGeneration = 'qaGenerationTool',
 }

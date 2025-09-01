@@ -6,6 +6,7 @@ export const TOOL_NAME: Record<string, string> = {
   [ImageToolName.Rect]: i18n.t('rect'),
   [EGlobalToolName.Tag]: i18n.t('tag'),
   [EGlobalToolName.Text]: i18n.t('textDescription'),
+  [EGlobalToolName.QAGeneration]: '问答对生成',
   [ImageToolName.Point]: i18n.t('point'),
   [ImageToolName.Polygon]: i18n.t('polygon'),
   [ImageToolName.Cuboid]: i18n.t('cuboid'),

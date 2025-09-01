@@ -25,6 +25,7 @@ import cuboidTemplate from './templates/cuboid.template';
 import pointTemplate from './templates/point.template';
 import tagTemplate from './templates/tag.template';
 import textTemplate from './templates/text.template';
+import qaGenerationTemplate from './templates/qaGeneration.template';
 import videoSegmentTemplate from './templates/videoSegment.template';
 import videoFrameTemplate from './templates/videoFrame.template';
 import audioSegmentTemplate from './templates/audioSegment.template';
@@ -55,6 +56,7 @@ const graphicTools = [
 const videoAnnotationTools = [EVideoToolName.VideoSegmentTool, EVideoToolName.VideoFrameTool];
 const audioAnnotationTools = [EAudioToolName.AudioSegmentTool, EAudioToolName.AudioFrameTool];
 const textAnnotationTools = [EGlobalToolName.Text, EGlobalToolName.Tag];
+const qaGenerationTools = [EGlobalToolName.Tag]; // 只保留标签工具，问答对生成工具移到全局工具中
 
 const toolMapping = {
   [MediaType.IMAGE]: graphicTools.map((item) => {
@@ -75,7 +77,7 @@ const toolMapping = {
       value: item,
     };
   }),
-  [MediaType.TEXT]: textAnnotationTools.map((item) => {
+  [MediaType.TEXT]: qaGenerationTools.map((item) => {
     return {
       label: TOOL_NAME[item],
       value: item,
@@ -92,7 +94,7 @@ const getDefaultActiveTool = (mediaType?: MediaType) => {
     case MediaType.AUDIO:
       return EAudioToolName.AudioSegmentTool;
     case MediaType.TEXT:
-      return EGlobalToolName.Text;
+      return EGlobalToolName.Tag;
     default:
       return undefined;
   }
@@ -112,6 +114,7 @@ const templateMapping: Record<string, any> = {
   [EVideoToolName.VideoFrameTool]: videoFrameTemplate,
   [EAudioToolName.AudioSegmentTool]: audioSegmentTemplate,
   [EAudioToolName.AudioFrameTool]: audioFrameTemplate,
+  [EGlobalToolName.QAGeneration]: qaGenerationTemplate,
 };
 
 const FormConfig = () => {
@@ -272,11 +275,16 @@ const FormConfig = () => {
     }
 
     const toolOptions = toolMapping[task.media_type!];
+    
+    // 为TEXT类型任务添加问答对生成工具到全局工具中
+    const availableGlobalTools = task.media_type === MediaType.TEXT 
+      ? [...globalTools, EGlobalToolName.QAGeneration]
+      : globalTools;
 
     return [
       {
         label: t('global'),
-        options: _.map(globalTools, (toolName) => ({
+        options: _.map(availableGlobalTools, (toolName) => ({
           disabled: selectedTools.includes(toolName),
           value: toolName,
           label: <span>{TOOL_NAME[toolName]}</span>,
