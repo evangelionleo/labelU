@@ -232,11 +232,17 @@ const CreateTask = () => {
 
       // 调试信息：检查智能标注工具是否在配置中
       console.log('保存前的任务配置:', annotationConfig);
-      const smartAnnotationTool = annotationConfig?.tools?.find((tool: any) => tool.tool === 'smartAnnotationTool');
-      if (smartAnnotationTool) {
-        console.log('智能标注工具配置:', smartAnnotationTool);
+      
+      // 修复：确保工具列表存在且不为空
+      if (annotationConfig?.tools && Array.isArray(annotationConfig.tools) && annotationConfig.tools.length > 0) {
+        const smartAnnotationTool = annotationConfig.tools.find((tool: any) => tool.tool === 'smartAnnotationTool');
+        if (smartAnnotationTool) {
+          console.log('智能标注工具配置:', smartAnnotationTool);
+        } else {
+          console.log('智能标注工具未找到，当前工具列表:', annotationConfig.tools.map((t: any) => t.tool));
+        }
       } else {
-        console.log('智能标注工具未找到，当前工具列表:', annotationConfig?.tools?.map((t: any) => t.tool));
+        console.log('工具列表为空或未定义:', annotationConfig?.tools);
       }
 
       if (emptyType === 'attribute') {

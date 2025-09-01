@@ -311,7 +311,10 @@ const Samples = () => {
 
         if (sampleNames) {
           return (
-            <FlexLayout items="center">
+            <FlexLayout items="center" gap="0.5rem">
+              <Link to={`/tasks/${taskId}/samples/${record.id}`}>
+                <Button type="link">{t('startAnnotate')}</Button>
+              </Link>
               <Button type="link" onClick={() => downloadFromUrl(record.url, record?.filename)}>
                 {t('download')}
               </Button>

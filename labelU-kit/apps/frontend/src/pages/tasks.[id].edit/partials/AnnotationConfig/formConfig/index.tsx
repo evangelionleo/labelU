@@ -176,8 +176,15 @@ const FormConfig = () => {
     const globalToolNames = _.filter(toolNames, (item) => globalTools.includes(item));
     setSelectedGlobalTools(globalToolNames);
     setActiveGlobalTool(globalToolNames[0]);
+    
+    // 修复：确保commonAttributeConfigurable字段正确设置
+    const hasQAGenerationTool = toolNames.includes(EGlobalToolName.QAGeneration);
+    if (hasQAGenerationTool && config?.commonAttributeConfigurable === undefined) {
+      // 如果存在问答对生成工具但commonAttributeConfigurable未定义，设置为false
+      annotationFormInstance.setFieldValue('commonAttributeConfigurable', false);
+    }
     setHasAttributes(config?.commonAttributeConfigurable ?? false);
-  }, [config, tools]);
+  }, [config, tools, annotationFormInstance]);
 
   // ======================== 以下为新增代码 ========================
   const handleToolItemClick: SelectProps['onChange'] = (key) => {
@@ -392,9 +399,14 @@ const FormConfig = () => {
           annotationFormInstance.setFieldValue('attributes', []);
         }
         setHasAttributes(changedValue.commonAttributeConfigurable);
+        
+        // 修复：确保问答对生成工具的commonAttributeConfigurable字段被正确设置
+        if (selectedTools.includes(EGlobalToolName.QAGeneration)) {
+          console.log('问答对生成工具的commonAttributeConfigurable已更新:', changedValue.commonAttributeConfigurable);
+        }
       }
     },
-    [annotationFormInstance],
+    [annotationFormInstance, selectedTools],
   );
 
   // 自动同步拉框标签到智能标注工具
@@ -507,6 +519,20 @@ const FormConfig = () => {
           name="commonAttributeConfigurable"
           tooltip={t('genericLabelTooltip')}
           hidden={globalTools.includes(activeTool as EGlobalToolName)}
+          initialValue={false}
+        >
+          <FancyInput type="boolean" />
+        </Form.Item>
+      )}
+
+      {/* 为问答对生成工具添加特殊的commonAttributeConfigurable字段 */}
+      {selectedTools.includes(EGlobalToolName.QAGeneration) && (
+        <Form.Item
+          label={<span className="formTitle">{t('genericLabels')}</span>}
+          name="commonAttributeConfigurable"
+          tooltip={t('genericLabelTooltip')}
+          initialValue={false}
+          hidden={false}
         >
           <FancyInput type="boolean" />
         </Form.Item>

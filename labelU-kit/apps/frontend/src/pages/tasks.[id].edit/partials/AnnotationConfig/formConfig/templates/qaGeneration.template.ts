@@ -1,30 +1,60 @@
-export default {
-  commonAttributeConfigurable: false,
-  drawOutsideTarget: false,
-  tools: [
-    {
-      tool: 'qaGenerationTool',
-      config: {
-        textConfigurable: false,
-        textCheckType: 0,
-        attributes: [
+import { i18n } from '@labelu/i18n';
+
+import type { FancyItemIdentifier } from '@/components/FancyInput/types';
+
+export default [
+  {
+    field: 'tool',
+    key: 'tool',
+    type: 'string',
+    hidden: true,
+    initialValue: 'qaGenerationTool',
+  },
+  {
+    key: 'config',
+    field: 'config',
+    type: 'group',
+    children: [
+      {
+        field: 'textConfigurable',
+        key: 'textConfigurable',
+        type: 'boolean',
+        hidden: true,
+        initialValue: false,
+      },
+      {
+        field: 'textCheckType',
+        key: 'textCheckType',
+        type: 'number',
+        hidden: true,
+        initialValue: 0,
+      },
+      {
+        type: 'category-attribute',
+        key: 'field',
+        field: 'attributes',
+        label: '',
+        addStringText: i18n.t('add'),
+        disabledStringOptions: ['order'],
+        showAddTag: false,
+        initialValue: [
           {
             key: '问题',
             value: 'question',
-            type: 'string',
-            stringType: 'text',
             required: true,
-            defaultValue: '',
+            type: 'string',
             maxLength: 500,
+            stringType: 'text',
+            defaultValue: '',
           },
           {
             key: '答案',
             value: 'answer',
-            type: 'string',
-            stringType: 'text',
             required: true,
-            defaultValue: '',
+            type: 'string',
             maxLength: 2000,
+            stringType: 'text',
+            defaultValue: '',
           },
           {
             key: '问题类型',
@@ -53,6 +83,6 @@ export default {
           },
         ],
       },
-    },
-  ],
-};
+    ],
+  },
+] as FancyItemIdentifier[];
