@@ -30,20 +30,24 @@ import imageSchema from './imagePreAnnotationJsonl.schema.json';
 import imageJsonSchema from './imagePreAnnotationJson.schema.json';
 import audioJsonSchema from './audioPreAnnotationJson.schema.json';
 import videoJsonSchema from './videoPreAnnotationJson.schema.json';
+import textJsonSchema from './textPreAnnotationJson.schema.json';
 import audioSchema from './audioPreAnnotationJsonl.schema.json';
 import videoSchema from './videoPreAnnotationJsonl.schema.json';
+import textSchema from './textPreAnnotationJsonl.schema.json';
 import { isCorrectFiles, isPreAnnotationFile, normalizeFiles, readFile, UploadStatus } from './utils';
 
 const jsonlMapping = {
   [MediaType.IMAGE]: imageSchema,
   [MediaType.VIDEO]: videoSchema,
   [MediaType.AUDIO]: audioSchema,
+  [MediaType.TEXT]: textSchema,
 };
 
 const jsonMapping = {
   [MediaType.IMAGE]: imageJsonSchema,
   [MediaType.VIDEO]: videoJsonSchema,
   [MediaType.AUDIO]: audioJsonSchema,
+  [MediaType.TEXT]: textJsonSchema,
 };
 
 export interface QueuedFile {

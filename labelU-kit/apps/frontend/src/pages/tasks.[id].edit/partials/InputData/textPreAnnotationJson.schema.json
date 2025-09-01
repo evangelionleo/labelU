@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "文本内容"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "description": "问题"
+                },
+                "answer": {
+                  "type": "string",
+                  "description": "答案"
+                }
+              },
+              "required": ["question", "answer"]
+            },
+            "description": "问答对列表"
+          }
+        },
+        "required": ["text"]
+      }
+    }
+  },
+  "required": ["samples"]
+}

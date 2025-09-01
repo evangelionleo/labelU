@@ -9,6 +9,7 @@ import TaskEdit from '@/pages/tasks.[id].edit';
 import TaskAnnotation from '@/pages/tasks.[id].samples.[id]';
 import Samples from '@/pages/tasks.[id]';
 import TaskSamplesFinished from '@/pages/tasks.[id].samples.finished';
+import SamplesManagement from '@/pages/samples';
 import Page404 from '@/pages/404';
 import MainLayout from '@/layouts/MainLayoutWithNavigation';
 import Dashboard from '@/pages/dashboard';
@@ -214,6 +215,23 @@ const routes: RouteObject[] = [
                 ],
               },
             ],
+          },
+        ],
+      },
+      {
+        path: 'samples-management',
+        element: <MainLayout />,
+        errorElement: <Page404 />,
+        id: 'samples-management',
+        handle: {
+          crumb: () => {
+            return '样本管理';
+          },
+        },
+        children: [
+          {
+            index: true,
+            element: <SamplesManagement />,
           },
         ],
       },

@@ -89,10 +89,6 @@ const Sidebar: React.FC = () => {
           key: '/tasks/0/edit?isNew=true',
           label: '新建任务',
         },
-        {
-          key: '/tasks/templates',
-          label: '任务模板',
-        },
       ],
     },
     {
@@ -101,16 +97,8 @@ const Sidebar: React.FC = () => {
       label: '样本管理',
       children: [
         {
-          key: '/samples/all',
-          label: '全部样本',
-        },
-        {
-          key: '/samples/annotated',
-          label: '已标注样本',
-        },
-        {
-          key: '/samples/unannotated',
-          label: '未标注样本',
+          key: '/samples-management',
+          label: '导出文件管理',
         },
       ],
     },

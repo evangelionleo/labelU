@@ -54,6 +54,7 @@ const graphicTools = [
 ];
 const videoAnnotationTools = [EVideoToolName.VideoSegmentTool, EVideoToolName.VideoFrameTool];
 const audioAnnotationTools = [EAudioToolName.AudioSegmentTool, EAudioToolName.AudioFrameTool];
+const textAnnotationTools = [EGlobalToolName.Text, EGlobalToolName.Tag];
 
 const toolMapping = {
   [MediaType.IMAGE]: graphicTools.map((item) => {
@@ -74,6 +75,12 @@ const toolMapping = {
       value: item,
     };
   }),
+  [MediaType.TEXT]: textAnnotationTools.map((item) => {
+    return {
+      label: TOOL_NAME[item],
+      value: item,
+    };
+  }),
 };
 
 const getDefaultActiveTool = (mediaType?: MediaType) => {
@@ -84,6 +91,8 @@ const getDefaultActiveTool = (mediaType?: MediaType) => {
       return EVideoToolName.VideoSegmentTool;
     case MediaType.AUDIO:
       return EAudioToolName.AudioSegmentTool;
+    case MediaType.TEXT:
+      return EGlobalToolName.Text;
     default:
       return undefined;
   }

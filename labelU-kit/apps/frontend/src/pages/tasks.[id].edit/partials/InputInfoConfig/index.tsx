@@ -51,6 +51,10 @@ const InputInfoConfig = () => {
                     label: t('audio'),
                     value: MediaType.AUDIO,
                   },
+                  {
+                    label: '文本(问答对生成)',
+                    value: MediaType.TEXT,
+                  },
                 ]}
               />
             </Form.Item>

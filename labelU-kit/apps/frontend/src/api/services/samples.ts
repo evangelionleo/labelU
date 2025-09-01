@@ -148,12 +148,67 @@ export async function outputSamples(taskId: number, activeTxt: ExportType) {
 
   if (sampleIds.length === 0) {
     commonController.notificationErrorMessage({ message: '后端返回数据出现问题' }, 1);
-    return;
+    return null;
   }
 
-  await outputSample(taskId, sampleIds, activeTxt);
+  // 获取导出数据但不自动下载
+  const headers = {} as any;
 
-  return true;
+  if (
+    [
+      ExportType.MASK,
+      ExportType.LABEL_ME,
+      ExportType.YOLO,
+      ExportType.CSV,
+      ExportType.XML,
+      ExportType.TF_RECORD,
+      ExportType.PASCAL_VOC,
+    ].includes(activeTxt)
+  ) {
+    headers.responseType = 'blob';
+  }
+
+  const data = await request.post(
+    `/v1/tasks/${taskId}/samples/export`,
+    {
+      sample_ids: sampleIds,
+    },
+    {
+      params: {
+        task_id: taskId,
+        export_type: activeTxt,
+      },
+      ...headers,
+    },
+  );
+
+  // 同时执行下载操作
+  const taskRes = await getTask(taskId);
+  const blobData = new Blob([JSON.stringify(data)]);
+  let url = window.URL.createObjectURL(blobData);
+  const a = document.createElement('a');
+  let filename = taskRes.data.name;
+
+  switch (activeTxt) {
+    case ExportType.JSON:
+    case ExportType.COCO:
+      filename = filename + '.json';
+      break;
+    case ExportType.MASK:
+    case ExportType.CSV:
+    case ExportType.XML:
+    case ExportType.LABEL_ME:
+    case ExportType.YOLO:
+    case ExportType.TF_RECORD:
+    case ExportType.PASCAL_VOC:
+      url = window.URL.createObjectURL(data as any);
+      break;
+  }
+  a.download = filename!;
+  a.href = url;
+  a.click();
+
+  return data;
 }
 
 export async function deleteSamples(

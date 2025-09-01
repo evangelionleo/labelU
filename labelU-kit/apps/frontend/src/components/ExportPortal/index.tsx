@@ -1,11 +1,15 @@
-import { Modal, Select } from 'antd';
+import { Modal, Select, Input, Checkbox, Space, Typography } from 'antd';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlexLayout } from '@labelu/components-react';
 import { i18n, useTranslation } from '@labelu/i18n';
+import { message } from 'antd';
 
 import { ExportType, MediaType } from '@/api/types';
 import { outputSample, outputSamples } from '@/api/services/samples';
+import { saveExportToSamples } from '@/api/services/exportManagement';
 import { EGlobalToolName, ImageToolName } from '@/enums';
+
+const { Text } = Typography;
 
 export interface ExportPortalProps {
   children: React.ReactChild;
@@ -78,6 +82,8 @@ function isIncludeCoco(tools?: any[]) {
 export default function ExportPortal({ taskId, sampleIds, mediaType, tools, children }: ExportPortalProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [exportType, setExportType] = useState<ExportType>(ExportType.JSON);
+  const [saveToSamples, setSaveToSamples] = useState(false);
+  const [exportFileName, setExportFileName] = useState('');
   const { t } = useTranslation();
 
   const handleOpenModal = useCallback((e: React.MouseEvent) => {
@@ -95,16 +101,63 @@ export default function ExportPortal({ taskId, sampleIds, mediaType, tools, chil
   };
 
   const handleExport = useCallback(async () => {
-    if (!sampleIds) {
-      await outputSamples(taskId, exportType);
-    } else {
-      await outputSample(taskId, sampleIds, exportType);
-    }
+    try {
+      console.log('开始导出，参数:', {
+        taskId,
+        sampleIds,
+        exportType,
+        saveToSamples,
+        exportFileName
+      });
 
-    setTimeout(() => {
-      setModalVisible(false);
-    });
-  }, [exportType, sampleIds, taskId]);
+      let exportData;
+      
+      if (!sampleIds) {
+        console.log('执行全量导出');
+        exportData = await outputSamples(taskId, exportType);
+      } else {
+        console.log('执行选中样本导出，样本ID:', sampleIds);
+        exportData = await outputSample(taskId, sampleIds, exportType);
+      }
+
+      console.log('导出数据获取成功:', exportData);
+
+      // 如果选择保存到样本管理
+      if (saveToSamples && exportFileName.trim()) {
+        console.log('准备保存到样本管理:', {
+          taskId,
+          exportType,
+          fileName: exportFileName.trim()
+        });
+        
+        try {
+          const saveResult = await saveExportToSamples(taskId, exportType, exportFileName.trim(), exportData);
+          console.log('保存到样本管理结果:', saveResult);
+          
+          if (saveResult.success) {
+            message.success('导出文件已成功保存到样本管理！');
+          } else {
+            message.warning(`导出成功，但保存到样本管理失败: ${saveResult.message}`);
+          }
+        } catch (saveError) {
+          console.error('保存到样本管理失败:', saveError);
+          message.warning('导出成功，但保存到样本管理失败');
+        }
+      } else {
+        message.success('导出成功！');
+      }
+
+      setTimeout(() => {
+        setModalVisible(false);
+        // 重置状态
+        setSaveToSamples(false);
+        setExportFileName('');
+      });
+    } catch (error) {
+      console.error('导出失败:', error);
+      message.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [exportType, sampleIds, taskId, saveToSamples, exportFileName]);
 
   const plainChild = useMemo(() => {
     if (
@@ -179,13 +232,42 @@ export default function ExportPortal({ taskId, sampleIds, mediaType, tools, chil
         onOk={handleExport}
         onCancel={handleCloseModal}
         open={modalVisible}
+        width={600}
       >
         <FlexLayout flex="column" gap="1rem">
           <FlexLayout.Header items="center" gap="1rem" flex>
             <span style={{ whiteSpace: 'nowrap' }}>{t('exportFormat')}</span>
             <Select popupMatchSelectWidth={false} options={options} onChange={handleOptionChange} value={exportType} />
           </FlexLayout.Header>
+          
           <div>{exportDescriptionMapping[exportType]}</div>
+          
+          {/* 保存到样本管理选项 */}
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Checkbox 
+              checked={saveToSamples} 
+              onChange={(e) => setSaveToSamples(e.target.checked)}
+            >
+              <Text strong>保存到样本管理</Text>
+            </Checkbox>
+            
+            {saveToSamples && (
+              <div style={{ marginLeft: 24 }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                  请输入导出文件名称：
+                </Text>
+                <Input
+                  placeholder="请输入文件名称"
+                  value={exportFileName}
+                  onChange={(e) => setExportFileName(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+                <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                  导出的文件将保存到样本管理页面，可以在样本管理中查看和下载
+                </Text>
+              </div>
+            )}
+          </Space>
         </FlexLayout>
       </Modal>
     </>
