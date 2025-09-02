@@ -1,6 +1,6 @@
 import { useState, createRef, useMemo, useCallback, useRef, useLayoutEffect, useEffect } from 'react';
 import * as _ from 'lodash-es';
-import { Empty, Spin, message, Typography, Card, Space, Button, Alert } from 'antd';
+import { Empty, Spin, message, Typography, Card, Space, Button, Alert, Tabs, Switch } from 'antd';
 import { Annotator } from '@labelu/video-annotator-react';
 import type { AudioAndVideoAnnotatorRef } from '@labelu/audio-annotator-react';
 import { Annotator as AudioAnnotator } from '@labelu/audio-annotator-react';
@@ -62,6 +62,9 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
   const { t } = useTranslation();
   const { Title, Text, Paragraph } = Typography;
   
+  // 获取任务的所有样本和预标注文件
+  const { samples, preAnnotations } = useRouteLoaderData('task') as any;
+  
   // PDF查看状态
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -70,10 +73,24 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
   const [pdfError, setPdfError] = useState<string>('');
   const [pdfDocument, setPdfDocument] = useState<any>(null);
   
+  // OCR状态
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState<any>(null);
+  const [ocrError, setOcrError] = useState<string>('');
+  
+  // 图片模式状态
+  const [useHighQualityMode, setUseHighQualityMode] = useState(false); // false: 速度最快, true: 平衡性能
+  
+  // 样本导航状态
+  const [currentSampleIndex, setCurrentSampleIndex] = useState(0);
+  const [allSamples, setAllSamples] = useState<any[]>([]);
+  
   console.log('QAGenerationAnnotation 组件开始渲染');
   console.log('任务信息:', task);
   console.log('样本信息:', sample);
   console.log('预标注信息:', preAnnotation);
+  console.log('所有样本:', samples);
+  console.log('所有预标注:', preAnnotations);
   
   // 获取PDF文件URL
   useEffect(() => {
@@ -85,6 +102,192 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       console.log('预标注PDF文件URL:', preAnnotation.data[0].file.url);
     }
   }, [sample, preAnnotation]);
+  
+  // 构建所有样本列表
+  useEffect(() => {
+    console.log('开始构建样本列表');
+    console.log('samples:', samples);
+    console.log('samples?.data:', samples?.data);
+    console.log('samples?.data 类型:', typeof samples?.data);
+    console.log('samples?.data 是否为数组:', Array.isArray(samples?.data));
+    
+    if (samples?.data && Array.isArray(samples.data)) {
+      const sampleList = samples.data.filter((sampleItem: any) => 
+        sampleItem.data?.file && sampleItem.data.file.url
+      );
+      setAllSamples(sampleList);
+      
+      // 设置当前样本索引
+      const currentIndex = sampleList.findIndex((s: any) => s.id === sample?.id);
+      if (currentIndex !== -1) {
+        setCurrentSampleIndex(currentIndex);
+        console.log('当前样本索引:', currentIndex);
+      }
+    }
+  }, [samples, sample]);
+  
+  // 样本切换处理
+  const handleSampleChange = (direction: 'prev' | 'next') => {
+    if (direction === 'prev' && currentSampleIndex > 0) {
+      const newIndex = currentSampleIndex - 1;
+      setCurrentSampleIndex(newIndex);
+      const newSample = allSamples[newIndex];
+      if (newSample?.data?.file?.url) {
+        setPdfUrl(newSample.data.file.url);
+        // 重置PDF状态
+        setCurrentPage(1);
+        setTotalPages(1);
+        setPdfDocument(null);
+        setPdfError('');
+        console.log('切换到上一个样本:', newSample);
+      }
+    } else if (direction === 'next' && currentSampleIndex < allSamples.length - 1) {
+      const newIndex = currentSampleIndex + 1;
+      setCurrentSampleIndex(newIndex);
+      const newSample = allSamples[newIndex];
+      if (newSample?.data?.file?.url) {
+        setPdfUrl(newSample.data.file.url);
+        // 重置PDF状态
+        setCurrentPage(1);
+        setTotalPages(1);
+        setPdfDocument(null);
+        setPdfError('');
+        console.log('切换到下一个样本:', newSample);
+      }
+    }
+  };
+  
+  // OCR当前页
+  const handleOCRCurrentPage = async () => {
+    if (!pdfDocument) {
+      setOcrError('PDF文档未加载完成');
+      return;
+    }
+    
+    try {
+      setOcrLoading(true);
+      setOcrError('');
+      setOcrResult(null);
+      
+      console.log('=== OCR Debug 开始 ===');
+      console.log('当前页:', currentPage);
+      console.log('图片模式:', useHighQualityMode ? '平衡性能' : '速度最快');
+      console.log('useHighQualityMode状态:', useHighQualityMode);
+      
+      let canvasElement: HTMLCanvasElement | null = null;
+      
+      if (useHighQualityMode) {
+        // 平衡性能模式：获取高质量图片
+        console.log('使用平衡性能模式，开始获取高质量图片...');
+        canvasElement = await getHighQualityPageImage();
+        if (!canvasElement) {
+          setOcrError('获取高质量图片失败');
+          return;
+        }
+        console.log('平衡性能模式 - 获取到高质量图片:', canvasElement.width, '×', canvasElement.height);
+      } else {
+        // 速度最快模式：使用当前显示的图片
+        console.log('使用速度最快模式，获取当前显示图片...');
+        canvasElement = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+        if (!canvasElement) {
+          setOcrError('无法获取当前页面canvas');
+          return;
+        }
+        console.log('速度最快模式 - 获取到当前图片:', canvasElement.width, '×', canvasElement.height);
+      }
+      
+      console.log('最终使用的Canvas尺寸:', canvasElement.width, '×', canvasElement.height);
+      console.log('总像素数:', canvasElement.width * canvasElement.height);
+      console.log('=== OCR Debug 结束 ===');
+      
+      // 将canvas转换为blob
+      const blob = await new Promise<Blob>((resolve) => {
+        canvasElement!.toBlob((blob) => {
+          if (blob) resolve(blob);
+        }, 'image/png');
+      });
+      
+      // 创建FormData
+      const formData = new FormData();
+      formData.append('file', blob, `page_${currentPage}_${canvasElement.width}x${canvasElement.height}.png`);
+      formData.append('prompt_mode', 'prompt_layout_all_en');
+      formData.append('server_ip', '127.0.0.1');
+      formData.append('server_port', '8000');
+      formData.append('min_pixels', '100000');
+      formData.append('max_pixels', '1000000');
+      formData.append('fitz_preprocess', 'false');
+      formData.append('max_image_width', '1300');
+      formData.append('max_image_height', '1300');
+      formData.append('max_total_pixels', '1690000');
+      
+      // 调用OCR API
+      const response = await fetch('http://localhost:5004/realtime/ocr', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`OCR API调用失败: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setOcrResult(result.data);
+        console.log('OCR结果:', result.data);
+      } else {
+        throw new Error(result.error || 'OCR处理失败');
+      }
+      
+    } catch (error: any) {
+      console.error('OCR处理失败:', error);
+      setOcrError(error.message || 'OCR处理失败');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+  
+  // 获取当前页高质量图片（平衡性能模式）
+  const getHighQualityPageImage = async (): Promise<HTMLCanvasElement | null> => {
+    if (!pdfDocument) return null;
+    
+    try {
+      // 获取当前页面
+      const page = await pdfDocument.getPage(currentPage);
+      
+      // 计算缩放比例，将最长边缩放到1300像素
+      const viewport = page.getViewport({ scale: 1.0 });
+      const maxDimension = Math.max(viewport.width, viewport.height);
+      const targetScale = 1300 / maxDimension;
+      
+      // 创建新的viewport
+      const scaledViewport = page.getViewport({ scale: targetScale });
+      
+      // 创建canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      
+      // 设置canvas尺寸
+      canvas.width = scaledViewport.width;
+      canvas.height = scaledViewport.height;
+      
+      // 渲染页面到canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: scaledViewport
+      };
+      
+      await page.render(renderContext).promise;
+      
+      console.log(`平衡性能模式 - 页面${currentPage}: ${viewport.width}×${viewport.height} → ${scaledViewport.width}×${scaledViewport.height} (缩放比例: ${targetScale.toFixed(3)})`);
+      
+      return canvas;
+    } catch (error: any) {
+      console.error('获取高质量图片失败:', error);
+      return null;
+    }
+  };
   
   // 加载PDF文档并获取页数
   useEffect(() => {
@@ -240,7 +443,12 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
         {pdfUrl && (
           <div style={{ marginTop: '0.5rem' }}>
             <Text type="secondary">
-              当前文件: {sample?.data?.file?.filename || preAnnotation?.data?.[0]?.file?.filename || '未命名文件'}
+             当前文件: {allSamples[currentSampleIndex]?.data?.file?.filename || sample?.data?.file?.filename || preAnnotation?.data?.[0]?.file?.filename || '未命名文件'}
+             {allSamples.length > 0 && (
+               <span style={{ marginLeft: '0.5rem', color: '#1890ff' }}>
+                 (样本 {currentSampleIndex + 1} / {allSamples.length})
+               </span>
+             )}
             </Text>
           </div>
         )}
@@ -253,55 +461,314 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
         />
       </Card>
       
-      {/* PDF查看器 */}
-      <Card title="PDF文档查看" style={{ marginBottom: '1rem' }}>
-        <div style={{ 
-          width: '45vw',
-          background: '#f8f9fa', 
-          border: '2px dashed #d9d9d9',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          position: 'relative',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '200px'
-        }}>
-          {renderPDFContent()}
-        </div>
-        
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginTop: '1rem',
-          padding: '1rem 0',
-          borderTop: '1px solid #f0f0f0'
-        }}>
-          <Space>
-            <Button 
-              disabled={currentPage <= 1}
-              onClick={() => handlePageChange('prev')}
-            >
-              上一页
-            </Button>
-            <Text>第 {currentPage} 页 / 共 {totalPages} 页</Text>
-            <Button 
-              disabled={currentPage >= totalPages}
-              onClick={() => handlePageChange('next')}
-            >
-              下一页
-            </Button>
-          </Space>
+      {/* PDF查看器和OCR结果 */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+        {/* 左侧：PDF查看器 */}
+        <Card title="PDF文档查看" style={{ flex: 1 }}>
+          <div style={{ 
+            width: '100%',
+            background: '#f8f9fa', 
+            border: '2px dashed #d9d9d9',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            position: 'relative',
+            margin: '0 auto',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '200px'
+          }}>
+            {renderPDFContent()}
+          </div>
           
-          <Space>
-            <Text>文件 1 / 1</Text>
-            <Button disabled>上一个文件</Button>
-            <Button disabled>下一个文件</Button>
-          </Space>
-        </div>
-      </Card>
+          {/* PDF控制按钮 */}
+          <div style={{ 
+            marginTop: '1rem', 
+            paddingTop: '1rem',
+            borderTop: '1px solid #f0f0f0'
+          }}>
+            <Space>
+              <Button 
+                disabled={currentPage <= 1}
+                onClick={() => handlePageChange('prev')}
+              >
+                上一页
+              </Button>
+              <Text>第 {currentPage} 页 / 共 {totalPages} 页</Text>
+              <Button 
+                disabled={currentPage >= totalPages}
+                onClick={() => handlePageChange('next')}
+              >
+                下一页
+              </Button>
+            </Space>
+            
+            <Space style={{ marginTop: '1rem' }}>
+              <Text>样本 {currentSampleIndex + 1} / {allSamples.length || 1}</Text>
+              <Button 
+                disabled={currentSampleIndex <= 0}
+                onClick={() => handleSampleChange('prev')}
+              >
+                上一个样本
+              </Button>
+              <Button 
+                disabled={currentSampleIndex >= (allSamples.length || 1) - 1}
+                onClick={() => handleSampleChange('next')}
+              >
+                下一个样本
+              </Button>
+            </Space>
+          </div>
+        </Card>
+        
+        {/* 右侧：OCR结果展示 */}
+        <Card title="OCR识别结果" style={{ flex: 1 }}>
+          <div style={{ marginBottom: '1rem' }}>
+            {/* 图片模式选择 */}
+            <div style={{ 
+              marginBottom: '1rem', 
+              padding: '0.5rem', 
+              background: '#f6f8fa', 
+              borderRadius: '4px',
+              border: '1px solid #e1e4e8'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#24292e' }}>
+                  图片模式: <strong>{useHighQualityMode ? '平衡性能' : '速度最快'}</strong>
+                </span>
+                <Switch
+                  checked={useHighQualityMode}
+                  onChange={setUseHighQualityMode}
+                  checkedChildren="平衡性能"
+                  unCheckedChildren="速度最快"
+                />
+              </div>
+              <div style={{ 
+                marginTop: '0.5rem', 
+                fontSize: '12px', 
+                color: '#586069',
+                lineHeight: '1.4'
+              }}>
+                {useHighQualityMode ? 
+                  '将最长边缩放到1300像素，短边自适应，提供更好的OCR质量' : 
+                  '使用当前显示的图片，处理速度最快'
+                }
+              </div>
+            </div>
+            
+            <Space>
+              <Button 
+                type="primary"
+                loading={ocrLoading}
+                onClick={handleOCRCurrentPage}
+                disabled={!pdfDocument}
+              >
+                {ocrLoading ? 'OCR处理中...' : 'OCR当前页'}
+              </Button>
+              
+              <Button 
+                onClick={async () => {
+                  try {
+                    console.log('=== 下载图片 Debug 开始 ===');
+                    console.log('当前页:', currentPage);
+                    console.log('图片模式:', useHighQualityMode ? '平衡性能' : '速度最快');
+                    console.log('useHighQualityMode状态:', useHighQualityMode);
+                    
+                    let canvasElement: HTMLCanvasElement | null = null;
+                    
+                    if (useHighQualityMode) {
+                      // 平衡性能模式：获取高质量图片
+                      console.log('使用平衡性能模式，开始获取高质量图片...');
+                      canvasElement = await getHighQualityPageImage();
+                      if (!canvasElement) {
+                        message.error('获取高质量图片失败');
+                        return;
+                      }
+                      console.log('平衡性能模式 - 获取到高质量图片:', canvasElement.width, '×', canvasElement.height);
+                    } else {
+                      // 速度最快模式：使用当前显示的图片
+                      console.log('使用速度最快模式，获取当前显示图片...');
+                      canvasElement = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+                      if (!canvasElement) {
+                        message.error('无法获取当前页面canvas');
+                        return;
+                      }
+                      console.log('速度最快模式 - 获取到当前图片:', canvasElement.width, '×', canvasElement.height);
+                    }
+                    
+                    console.log('最终使用的Canvas尺寸:', canvasElement.width, '×', canvasElement.height);
+                    console.log('总像素数:', canvasElement.width * canvasElement.height);
+                    console.log('=== 下载图片 Debug 结束 ===');
+                    
+                    // 将canvas转换为blob并下载
+                    const blob = await new Promise<Blob>((resolve) => {
+                      canvasElement!.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                      }, 'image/png');
+                    });
+                    
+                    // 创建下载链接
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `page_${currentPage}_${canvasElement.width}x${canvasElement.height}_${useHighQualityMode ? 'high' : 'fast'}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    message.success(`已下载第${currentPage}页图片: ${canvasElement.width}×${canvasElement.height} (${useHighQualityMode ? '平衡性能' : '速度最快'}模式)`);
+                  } catch (error: any) {
+                    message.error(`下载失败: ${error.message}`);
+                  }
+                }}
+                disabled={!pdfDocument}
+              >
+                下载当前页图片
+              </Button>
+            </Space>
+            
+            {/* Debug信息：当前页像素大小 */}
+            {pdfDocument && (
+              <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                background: '#f0f8ff', 
+                borderRadius: '4px',
+                fontSize: '12px',
+                border: '1px solid #d6e4ff'
+              }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#1890ff' }}>
+                  🔍 OCR Debug 信息
+                </div>
+                <div>当前页: <strong>{currentPage}</strong></div>
+                <div>图片模式: <strong style={{ color: useHighQualityMode ? '#52c41a' : '#fa8c16' }}>
+                  {useHighQualityMode ? '平衡性能' : '速度最快'}
+                </strong></div>
+                <div>Canvas尺寸: <strong>{(() => {
+                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+                  return canvas ? `${canvas.width} × ${canvas.height}` : 'N/A';
+                })()}</strong></div>
+                <div>总像素数: <strong>{(() => {
+                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+                  if (canvas) {
+                    const pixels = canvas.width * canvas.height;
+                    return pixels.toLocaleString();
+                  }
+                  return 'N/A';
+                })()}</strong></div>
+                <div>预估内存: <strong>{(() => {
+                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+                  if (canvas) {
+                    const pixels = canvas.width * canvas.height;
+                    return (pixels * 4 / (1024 * 1024)).toFixed(2) + ' MB';
+                  }
+                  return 'N/A';
+                })()}</strong></div>
+                <div style={{ marginTop: '0.5rem', fontSize: '11px', color: '#666' }}>
+                  服务端要求: min_pixels &gt;= 3136
+                </div>
+                <div style={{ marginTop: '0.5rem', fontSize: '11px', color: '#666' }}>
+                  {useHighQualityMode ? 
+                    '平衡性能模式：将重新渲染页面，最长边缩放到1300像素' : 
+                    '速度最快模式：使用当前显示的图片'
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {ocrError && (
+            <Alert
+              message="OCR错误"
+              description={ocrError}
+              type="error"
+              showIcon
+              style={{ marginBottom: '1rem' }}
+            />
+          )}
+          
+          {ocrResult && (
+            <div>
+              <Tabs defaultActiveKey="markdown" size="small">
+                <Tabs.TabPane tab="Markdown" key="markdown">
+                  <div style={{ 
+                    background: '#f5f5f5', 
+                    padding: '1rem', 
+                    borderRadius: '4px',
+                    maxHeight: '400px',
+                    overflow: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {ocrResult.md_content || '无Markdown内容'}
+                  </div>
+                </Tabs.TabPane>
+                
+                <Tabs.TabPane tab="结构化数据" key="cells">
+                  <div style={{ 
+                    background: '#f5f5f5', 
+                    padding: '1rem', 
+                    borderRadius: '4px',
+                    maxHeight: '400px',
+                    overflow: 'auto'
+                  }}>
+                    <pre style={{ 
+                      margin: 0, 
+                      fontSize: '11px',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {JSON.stringify(ocrResult.cells_data || {}, null, 2)}
+                    </pre>
+                  </div>
+                </Tabs.TabPane>
+                
+                <Tabs.TabPane tab="文件信息" key="info">
+                  <div style={{ 
+                    background: '#f5f5f5', 
+                    padding: '1rem', 
+                    borderRadius: '4px'
+                  }}>
+                    <p><strong>文件类型:</strong> {ocrResult.file_type}</p>
+                    {ocrResult.file_type === 'pdf' && (
+                      <p><strong>总页数:</strong> {ocrResult.total_pages}</p>
+                    )}
+                    {ocrResult.pixel_info && (
+                      <>
+                        <p><strong>像素信息:</strong></p>
+                        <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
+                          <li>总像素数: {ocrResult.pixel_info.total_pixels?.toLocaleString() || 'N/A'}</li>
+                          <li>预估内存: {ocrResult.pixel_info.estimated_memory_mb?.toFixed(2) || 'N/A'} MB</li>
+                          {ocrResult.pixel_info.width && (
+                            <li>尺寸: {ocrResult.pixel_info.width} × {ocrResult.pixel_info.height}</li>
+                          )}
+                        </ul>
+                      </>
+                    )}
+                    <p><strong>会话ID:</strong> {ocrResult.session_id}</p>
+                  </div>
+                </Tabs.TabPane>
+              </Tabs>
+            </div>
+          )}
+          
+          {!ocrResult && !ocrLoading && !ocrError && (
+            <div style={{ 
+              textAlign: 'center', 
+              color: '#999', 
+              padding: '2rem',
+              background: '#f9f9f9',
+              borderRadius: '4px'
+            }}>
+              <Empty 
+                description="点击上方按钮开始OCR识别" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            </div>
+          )}
+        </Card>
+      </div>
       
       {/* QA面板 */}
       <Card title="问答对管理">
@@ -367,7 +834,17 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
               pdfUrl: pdfUrl,
               currentPage: currentPage,
               totalPages: totalPages,
-              pdfDocumentLoaded: !!pdfDocument
+              pdfDocumentLoaded: !!pdfDocument,
+              sampleNavigation: {
+                currentSampleIndex: currentSampleIndex,
+                totalSamples: allSamples.length,
+                currentSample: allSamples[currentSampleIndex],
+                allSamples: allSamples.map((s: any) => ({ 
+                  id: s.id, 
+                  filename: s.data?.file?.filename, 
+                  url: s.data?.file?.url
+                }))
+              }
             }, null, 2)}
           </pre>
         </Paragraph>
@@ -389,6 +866,7 @@ const PDFPageRenderer = ({
   const { Text } = Typography;
   const [pageCanvas, setPageCanvas] = useState<HTMLCanvasElement | null>(null);
   const [pageLoading, setPageLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     if (!pdfDocument) return;
@@ -410,8 +888,8 @@ const PDFPageRenderer = ({
           throw new Error('无法创建canvas上下文');
         }
         
-        // 设置canvas尺寸
-        const viewport = page.getViewport({ scale: 1.5 });
+        // 设置canvas尺寸 - 使用1.0比例，稍后我们会缩放
+        const viewport = page.getViewport({ scale: 1.0 });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         
@@ -482,6 +960,9 @@ const PDFPageRenderer = ({
         <div ref={(el) => {
           if (el && pageCanvas) {
             el.innerHTML = '';
+            
+            // 为canvas添加class，以便OCR函数能够找到它
+            pageCanvas.className = 'pdf-page-canvas';
             el.appendChild(pageCanvas);
           }
         }} />
