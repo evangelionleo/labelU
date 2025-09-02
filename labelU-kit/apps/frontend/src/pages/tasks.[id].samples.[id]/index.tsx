@@ -256,12 +256,17 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       {/* PDF查看器 */}
       <Card title="PDF文档查看" style={{ marginBottom: '1rem' }}>
         <div style={{ 
-          height: '600px', 
+          width: '45vw',
           background: '#f8f9fa', 
           border: '2px dashed #d9d9d9',
           borderRadius: '8px',
           overflow: 'hidden',
-          position: 'relative'
+          position: 'relative',
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '200px'
         }}>
           {renderPDFContent()}
         </div>
@@ -467,8 +472,7 @@ const PDFPageRenderer = ({
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center', 
-      height: '100%',
-      overflow: 'auto'
+      padding: '1rem'
     }}>
       <div style={{ 
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
