@@ -13,6 +13,7 @@ import { FlexLayout } from '@labelu/components-react';
 import type { ToolName } from '@labelu/image';
 import type { ILabel } from '@labelu/interface';
 import { useTranslation } from '@labelu/i18n';
+import { ScanOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import { MediaType, SampleState, type SampleResponse } from '@/api/types';
 import { useScrollFetch } from '@/hooks/useScrollFetch';
@@ -432,6 +433,129 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
     );
   };
   
+  // 计算当前canvas的像素信息
+  const canvasDimensions = useMemo(() => {
+    const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+    if (canvas) {
+      return `${canvas.width} × ${canvas.height}`;
+    }
+    return 'N/A';
+  }, [currentPage]);
+
+  const totalPixels = useMemo(() => {
+    const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+    if (canvas) {
+      return canvas.width * canvas.height;
+    }
+    return 0;
+  }, [currentPage]);
+
+  const estimatedMemory = useMemo(() => {
+    const pixels = totalPixels;
+    return `${(pixels * 4 / (1024 * 1024)).toFixed(2)} MB`;
+  }, [totalPixels]);
+
+  // Markdown渲染函数
+  const renderMarkdown = (markdown: string): string => {
+    if (!markdown) return '';
+    
+    // 简单的Markdown到HTML转换
+    let html = markdown
+      // 标题
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      // 粗体和斜体
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // 代码
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      // 图片 - 支持base64和URL
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+        if (src.startsWith('data:image/')) {
+          // Base64图片
+          return `<img src="${src}" alt="${alt || '图片'}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; margin: 8px 0;" />`;
+        } else if (src.startsWith('http')) {
+          // 网络图片
+          return `<img src="${src}" alt="${alt || '图片'}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; margin: 8px 0;" />`;
+        } else {
+          // 相对路径图片
+          return `<img src="${src}" alt="${alt || '图片'}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; margin: 8px 0;" />`;
+        }
+      })
+      // 链接
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      // 列表
+      .replace(/^\- (.*$)/gim, '<li>$1</li>')
+      .replace(/^(\d+)\. (.*$)/gim, '<li>$1. $2</li>')
+      // 换行
+      .replace(/\n/g, '<br>');
+    
+    // 包装列表项
+    html = html
+      .replace(/(<li>.*?<\/li>)/gm, '<ul>$1</ul>')
+      .replace(/<\/ul>\s*<ul>/g, '');
+    
+    return html;
+  };
+
+  // 下载当前页图片函数
+  const handleDownloadCurrentPage = async () => {
+    try {
+      console.log('=== 下载图片 Debug 开始 ===');
+      console.log('当前页:', currentPage);
+      console.log('图片模式:', useHighQualityMode ? '平衡性能' : '速度最快');
+      console.log('useHighQualityMode状态:', useHighQualityMode);
+      
+      let canvasElement: HTMLCanvasElement | null = null;
+      
+      if (useHighQualityMode) {
+        // 平衡性能模式：获取高质量图片
+        console.log('使用平衡性能模式，开始获取高质量图片...');
+        canvasElement = await getHighQualityPageImage();
+        if (!canvasElement) {
+          message.error('获取高质量图片失败');
+          return;
+        }
+        console.log('平衡性能模式 - 获取到高质量图片:', canvasElement.width, '×', canvasElement.height);
+      } else {
+        // 速度最快模式：使用当前显示的图片
+        console.log('使用速度最快模式，获取当前显示图片...');
+        canvasElement = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
+        if (!canvasElement) {
+          message.error('无法获取当前页面canvas');
+          return;
+        }
+        console.log('速度最快模式 - 获取到当前图片:', canvasElement.width, '×', canvasElement.height);
+      }
+      
+      console.log('最终使用的Canvas尺寸:', canvasElement.width, '×', canvasElement.height);
+      console.log('总像素数:', canvasElement.width * canvasElement.height);
+      console.log('=== 下载图片 Debug 结束 ===');
+      
+      // 将canvas转换为blob并下载
+      const blob = await new Promise<Blob>((resolve) => {
+        canvasElement!.toBlob((blob) => {
+          if (blob) resolve(blob);
+        }, 'image/png');
+      });
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `page_${currentPage}_${canvasElement.width}x${canvasElement.height}_${useHighQualityMode ? 'high' : 'fast'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      message.success(`已下载第${currentPage}页图片: ${canvasElement.width}×${canvasElement.height} (${useHighQualityMode ? '平衡性能' : '速度最快'}模式)`);
+    } catch (error: any) {
+      message.error(`下载失败: ${error.message}`);
+    }
+  };
+  
   return (
     <div style={{ padding: '2rem', background: '#f5f5f5', minHeight: '100vh' }}>
       {/* 页面头部 */}
@@ -522,251 +646,127 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
         </Card>
         
         {/* 右侧：OCR结果展示 */}
-        <Card title="OCR识别结果" style={{ flex: 1 }}>
-          <div style={{ marginBottom: '1rem' }}>
-            {/* 图片模式选择 */}
-            <div style={{ 
-              marginBottom: '1rem', 
-              padding: '0.5rem', 
-              background: '#f6f8fa', 
-              borderRadius: '4px',
-              border: '1px solid #e1e4e8'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#24292e' }}>
-                  图片模式: <strong>{useHighQualityMode ? '平衡性能' : '速度最快'}</strong>
-                </span>
-                <Switch
-                  checked={useHighQualityMode}
-                  onChange={setUseHighQualityMode}
-                  checkedChildren="平衡性能"
-                  unCheckedChildren="速度最快"
-                />
-              </div>
-              <div style={{ 
-                marginTop: '0.5rem', 
-                fontSize: '12px', 
-                color: '#586069',
-                lineHeight: '1.4'
-              }}>
-                {useHighQualityMode ? 
-                  '将最长边缩放到1300像素，短边自适应，提供更好的OCR质量' : 
-                  '使用当前显示的图片，处理速度最快'
-                }
-              </div>
-            </div>
-            
-            <Space>
-              <Button 
-                type="primary"
-                loading={ocrLoading}
-                onClick={handleOCRCurrentPage}
-                disabled={!pdfDocument}
-              >
-                {ocrLoading ? 'OCR处理中...' : 'OCR当前页'}
-              </Button>
-              
-              <Button 
-                onClick={async () => {
-                  try {
-                    console.log('=== 下载图片 Debug 开始 ===');
-                    console.log('当前页:', currentPage);
-                    console.log('图片模式:', useHighQualityMode ? '平衡性能' : '速度最快');
-                    console.log('useHighQualityMode状态:', useHighQualityMode);
-                    
-                    let canvasElement: HTMLCanvasElement | null = null;
-                    
-                    if (useHighQualityMode) {
-                      // 平衡性能模式：获取高质量图片
-                      console.log('使用平衡性能模式，开始获取高质量图片...');
-                      canvasElement = await getHighQualityPageImage();
-                      if (!canvasElement) {
-                        message.error('获取高质量图片失败');
-                        return;
-                      }
-                      console.log('平衡性能模式 - 获取到高质量图片:', canvasElement.width, '×', canvasElement.height);
-                    } else {
-                      // 速度最快模式：使用当前显示的图片
-                      console.log('使用速度最快模式，获取当前显示图片...');
-                      canvasElement = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
-                      if (!canvasElement) {
-                        message.error('无法获取当前页面canvas');
-                        return;
-                      }
-                      console.log('速度最快模式 - 获取到当前图片:', canvasElement.width, '×', canvasElement.height);
+        <Card title="OCR识别结果" style={{ flex: 1, marginLeft: '16px' }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                    <Button 
+                        type="primary" 
+                        onClick={handleOCRCurrentPage}
+                        loading={ocrLoading}
+                        icon={<ScanOutlined />}
+                    >
+                        OCR当前页
+                    </Button>
+                    <Button 
+                        onClick={handleDownloadCurrentPage}
+                        icon={<DownloadOutlined />}
+                    >
+                        下载当前页图片
+                    </Button>
+                    <Switch
+                        checked={useHighQualityMode}
+                        onChange={setUseHighQualityMode}
+                        checkedChildren="平衡性能"
+                        unCheckedChildren="速度最快"
+                    />
+                </Space>
+                
+                {/* 图片模式说明 */}
+                <Alert
+                    message={`图片模式: ${useHighQualityMode ? '平衡性能' : '速度最快'}`}
+                    description={
+                        useHighQualityMode 
+                            ? "将发送1300像素最长边的图片，提供更好的OCR质量"
+                            : "使用当前显示的图片，处理速度最快"
                     }
-                    
-                    console.log('最终使用的Canvas尺寸:', canvasElement.width, '×', canvasElement.height);
-                    console.log('总像素数:', canvasElement.width * canvasElement.height);
-                    console.log('=== 下载图片 Debug 结束 ===');
-                    
-                    // 将canvas转换为blob并下载
-                    const blob = await new Promise<Blob>((resolve) => {
-                      canvasElement!.toBlob((blob) => {
-                        if (blob) resolve(blob);
-                      }, 'image/png');
-                    });
-                    
-                    // 创建下载链接
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `page_${currentPage}_${canvasElement.width}x${canvasElement.height}_${useHighQualityMode ? 'high' : 'fast'}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    message.success(`已下载第${currentPage}页图片: ${canvasElement.width}×${canvasElement.height} (${useHighQualityMode ? '平衡性能' : '速度最快'}模式)`);
-                  } catch (error: any) {
-                    message.error(`下载失败: ${error.message}`);
-                  }
-                }}
-                disabled={!pdfDocument}
-              >
-                下载当前页图片
-              </Button>
+                    type="info"
+                    showIcon
+                />
+                
+                {/* Debug信息 */}
+                <Card size="small" title="Debug信息" style={{ backgroundColor: '#f5f5f5' }}>
+                    <Space direction="vertical" size="small">
+                        <Text type="secondary">当前页: {currentPage}</Text>
+                        <Text type="secondary">Canvas尺寸: {canvasDimensions}</Text>
+                        <Text type="secondary">总像素数: {totalPixels.toLocaleString()}</Text>
+                        <Text type="secondary">预估内存: {estimatedMemory}</Text>
+                        <Text type="secondary">服务端要求: min_pixels &gt;= 3136</Text>
+                    </Space>
+                </Card>
+                
+                {/* OCR结果展示 */}
+                {ocrError && (
+                    <Alert
+                        message="OCR识别失败"
+                        description={ocrError}
+                        type="error"
+                        showIcon
+                    />
+                )}
+                
+                {ocrResult && (
+                    <Tabs defaultActiveKey="markdown" style={{ width: '100%' }}>
+                        <Tabs.TabPane tab="Markdown预览" key="markdown">
+                            <div 
+                                style={{ 
+                                    padding: '16px', 
+                                    border: '1px solid #d9d9d9', 
+                                    borderRadius: '6px',
+                                    backgroundColor: '#fff',
+                                    minHeight: '400px',
+                                    overflow: 'auto'
+                                }}
+                                dangerouslySetInnerHTML={{
+                                    __html: renderMarkdown(ocrResult.md_content || '')
+                                }}
+                            />
+                        </Tabs.TabPane>
+                        <Tabs.TabPane tab="结构化数据" key="json">
+                            <pre style={{ 
+                                padding: '16px', 
+                                backgroundColor: '#f6f8fa', 
+                                border: '1px solid #e1e4e8',
+                                borderRadius: '6px',
+                                overflow: 'auto',
+                                fontSize: '12px'
+                            }}>
+                                {JSON.stringify(ocrResult.cells_data || {}, null, 2)}
+                            </pre>
+                        </Tabs.TabPane>
+                        <Tabs.TabPane tab="文件信息" key="info">
+                            <div style={{ padding: '16px' }}>
+                                <p><strong>文件类型:</strong> {ocrResult.file_type}</p>
+                                {ocrResult.file_type === 'pdf' && (
+                                    <p><strong>总页数:</strong> {ocrResult.total_pages}</p>
+                                )}
+                                {ocrResult.pixel_info && (
+                                    <div>
+                                        <p><strong>像素信息:</strong></p>
+                                        <ul>
+                                            {ocrResult.pixel_info.width && (
+                                                <li>宽度: {ocrResult.pixel_info.width}</li>
+                                            )}
+                                            {ocrResult.pixel_info.height && (
+                                                <li>高度: {ocrResult.pixel_info.height}</li>
+                                            )}
+                                            <li>总像素数: {ocrResult.pixel_info.total_pixels?.toLocaleString()}</li>
+                                            <li>预估内存: {ocrResult.pixel_info.estimated_memory_mb?.toFixed(2)} MB</li>
+                                        </ul>
+                                    </div>
+                                )}
+                                <p><strong>会话ID:</strong> {ocrResult.session_id}</p>
+                            </div>
+                        </Tabs.TabPane>
+                    </Tabs>
+                )}
+                
+                {!ocrResult && !ocrError && (
+                    <Empty 
+                        description="点击'OCR当前页'开始识别"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                )}
             </Space>
-            
-            {/* Debug信息：当前页像素大小 */}
-            {pdfDocument && (
-              <div style={{ 
-                marginTop: '0.5rem', 
-                padding: '0.5rem', 
-                background: '#f0f8ff', 
-                borderRadius: '4px',
-                fontSize: '12px',
-                border: '1px solid #d6e4ff'
-              }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#1890ff' }}>
-                  🔍 OCR Debug 信息
-                </div>
-                <div>当前页: <strong>{currentPage}</strong></div>
-                <div>图片模式: <strong style={{ color: useHighQualityMode ? '#52c41a' : '#fa8c16' }}>
-                  {useHighQualityMode ? '平衡性能' : '速度最快'}
-                </strong></div>
-                <div>Canvas尺寸: <strong>{(() => {
-                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
-                  return canvas ? `${canvas.width} × ${canvas.height}` : 'N/A';
-                })()}</strong></div>
-                <div>总像素数: <strong>{(() => {
-                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
-                  if (canvas) {
-                    const pixels = canvas.width * canvas.height;
-                    return pixels.toLocaleString();
-                  }
-                  return 'N/A';
-                })()}</strong></div>
-                <div>预估内存: <strong>{(() => {
-                  const canvas = document.querySelector('.pdf-page-canvas') as HTMLCanvasElement;
-                  if (canvas) {
-                    const pixels = canvas.width * canvas.height;
-                    return (pixels * 4 / (1024 * 1024)).toFixed(2) + ' MB';
-                  }
-                  return 'N/A';
-                })()}</strong></div>
-                <div style={{ marginTop: '0.5rem', fontSize: '11px', color: '#666' }}>
-                  服务端要求: min_pixels &gt;= 3136
-                </div>
-                <div style={{ marginTop: '0.5rem', fontSize: '11px', color: '#666' }}>
-                  {useHighQualityMode ? 
-                    '平衡性能模式：将重新渲染页面，最长边缩放到1300像素' : 
-                    '速度最快模式：使用当前显示的图片'
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {ocrError && (
-            <Alert
-              message="OCR错误"
-              description={ocrError}
-              type="error"
-              showIcon
-              style={{ marginBottom: '1rem' }}
-            />
-          )}
-          
-          {ocrResult && (
-            <div>
-              <Tabs defaultActiveKey="markdown" size="small">
-                <Tabs.TabPane tab="Markdown" key="markdown">
-                  <div style={{ 
-                    background: '#f5f5f5', 
-                    padding: '1rem', 
-                    borderRadius: '4px',
-                    maxHeight: '400px',
-                    overflow: 'auto',
-                    fontFamily: 'monospace',
-                    fontSize: '12px',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {ocrResult.md_content || '无Markdown内容'}
-                  </div>
-                </Tabs.TabPane>
-                
-                <Tabs.TabPane tab="结构化数据" key="cells">
-                  <div style={{ 
-                    background: '#f5f5f5', 
-                    padding: '1rem', 
-                    borderRadius: '4px',
-                    maxHeight: '400px',
-                    overflow: 'auto'
-                  }}>
-                    <pre style={{ 
-                      margin: 0, 
-                      fontSize: '11px',
-                      whiteSpace: 'pre-wrap'
-                    }}>
-                      {JSON.stringify(ocrResult.cells_data || {}, null, 2)}
-                    </pre>
-                  </div>
-                </Tabs.TabPane>
-                
-                <Tabs.TabPane tab="文件信息" key="info">
-                  <div style={{ 
-                    background: '#f5f5f5', 
-                    padding: '1rem', 
-                    borderRadius: '4px'
-                  }}>
-                    <p><strong>文件类型:</strong> {ocrResult.file_type}</p>
-                    {ocrResult.file_type === 'pdf' && (
-                      <p><strong>总页数:</strong> {ocrResult.total_pages}</p>
-                    )}
-                    {ocrResult.pixel_info && (
-                      <>
-                        <p><strong>像素信息:</strong></p>
-                        <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
-                          <li>总像素数: {ocrResult.pixel_info.total_pixels?.toLocaleString() || 'N/A'}</li>
-                          <li>预估内存: {ocrResult.pixel_info.estimated_memory_mb?.toFixed(2) || 'N/A'} MB</li>
-                          {ocrResult.pixel_info.width && (
-                            <li>尺寸: {ocrResult.pixel_info.width} × {ocrResult.pixel_info.height}</li>
-                          )}
-                        </ul>
-                      </>
-                    )}
-                    <p><strong>会话ID:</strong> {ocrResult.session_id}</p>
-                  </div>
-                </Tabs.TabPane>
-              </Tabs>
-            </div>
-          )}
-          
-          {!ocrResult && !ocrLoading && !ocrError && (
-            <div style={{ 
-              textAlign: 'center', 
-              color: '#999', 
-              padding: '2rem',
-              background: '#f9f9f9',
-              borderRadius: '4px'
-            }}>
-              <Empty 
-                description="点击上方按钮开始OCR识别" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
-            </div>
-          )}
         </Card>
       </div>
       
