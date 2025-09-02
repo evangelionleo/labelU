@@ -1,6 +1,6 @@
 import { useState, createRef, useMemo, useCallback, useRef, useLayoutEffect, useEffect } from 'react';
 import * as _ from 'lodash-es';
-import { Empty, Spin, message } from 'antd';
+import { Empty, Spin, message, Typography, Card, Space, Button, Alert } from 'antd';
 import { Annotator } from '@labelu/video-annotator-react';
 import type { AudioAndVideoAnnotatorRef } from '@labelu/audio-annotator-react';
 import { Annotator as AudioAnnotator } from '@labelu/audio-annotator-react';
@@ -46,6 +46,272 @@ import {
 
 type AllToolName = ToolName | 'segment' | 'frame' | 'tag' | 'text';
 
+// 问答对生成标注组件
+const QAGenerationAnnotation = ({ task, sample, preAnnotation }: { 
+  task: any; 
+  sample: any; 
+  preAnnotation: any; 
+}) => {
+  const { t } = useTranslation();
+  const { Title, Text, Paragraph } = Typography;
+  
+  // PDF查看状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string>('');
+  
+  console.log('QAGenerationAnnotation 组件开始渲染');
+  console.log('任务信息:', task);
+  console.log('样本信息:', sample);
+  console.log('预标注信息:', preAnnotation);
+  
+  // 获取PDF文件URL
+  useEffect(() => {
+    if (sample?.data?.file?.url) {
+      setPdfUrl(sample.data.file.url);
+      console.log('PDF文件URL:', sample.data.file.url);
+    } else if (preAnnotation?.data?.[0]?.file?.url) {
+      setPdfUrl(preAnnotation.data[0].file.url);
+      console.log('预标注PDF文件URL:', preAnnotation.data[0].file.url);
+    }
+  }, [sample, preAnnotation]);
+  
+  // 模拟PDF页数（实际应该从PDF文件获取）
+  useEffect(() => {
+    // 这里应该实际读取PDF文件来获取页数
+    // 暂时设置为模拟值
+    setTotalPages(10);
+  }, []);
+  
+  // 翻页处理
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    if (direction === 'prev' && currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    } else if (direction === 'next' && currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  
+  // 渲染PDF内容
+  const renderPDFContent = () => {
+    if (pdfLoading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: '1rem' }}>
+            <Text>正在加载PDF文件...</Text>
+          </div>
+        </div>
+      );
+    }
+    
+    if (pdfError) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Alert
+            message="PDF加载失败"
+            description={pdfError}
+            type="error"
+            showIcon
+          />
+        </div>
+      );
+    }
+    
+    if (!pdfUrl) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Text type="secondary" style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>
+            未找到PDF文件
+          </Text>
+          <Text type="secondary">
+            请检查文件是否正确上传
+          </Text>
+        </div>
+      );
+    }
+    
+    // 实际PDF查看器
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        {/* 使用iframe显示PDF */}
+        <iframe
+          src={`${pdfUrl}#page=${currentPage}`}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            borderRadius: '8px'
+          }}
+          title="PDF查看器"
+          onLoad={() => {
+            console.log(`PDF第${currentPage}页加载完成`);
+          }}
+          onError={() => {
+            setPdfError('PDF文件加载失败，请检查文件格式或网络连接');
+          }}
+        />
+        
+        {/* PDF加载状态指示器 */}
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          background: 'rgba(0,0,0,0.7)',
+          color: 'white',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '12px'
+        }}>
+          第 {currentPage} 页 / 共 {totalPages} 页
+        </div>
+      </div>
+    );
+  };
+  
+  return (
+    <div style={{ padding: '2rem', background: '#f5f5f5', minHeight: '100vh' }}>
+      {/* 页面头部 */}
+      <Card style={{ marginBottom: '1rem' }}>
+        <Title level={3}>问答对生成任务</Title>
+        <Text type="secondary">
+          任务ID: {task.id} | 任务名称: {task.name}
+        </Text>
+        {pdfUrl && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <Text type="secondary">
+              当前文件: {sample?.data?.file?.filename || preAnnotation?.data?.[0]?.file?.filename || '未命名文件'}
+            </Text>
+          </div>
+        )}
+        <Alert
+          message="问答对生成页面"
+          description="这是问答对生成任务的标注页面"
+          type="success"
+          showIcon
+          style={{ marginTop: '1rem' }}
+        />
+      </Card>
+      
+      {/* PDF查看器 */}
+      <Card title="PDF文档查看" style={{ marginBottom: '1rem' }}>
+        <div style={{ 
+          height: '600px', 
+          background: '#f8f9fa', 
+          border: '2px dashed #d9d9d9',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          position: 'relative'
+        }}>
+          {renderPDFContent()}
+        </div>
+        
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginTop: '1rem',
+          padding: '1rem 0',
+          borderTop: '1px solid #f0f0f0'
+        }}>
+          <Space>
+            <Button 
+              disabled={currentPage <= 1}
+              onClick={() => handlePageChange('prev')}
+            >
+              上一页
+            </Button>
+            <Text>第 {currentPage} 页 / 共 {totalPages} 页</Text>
+            <Button 
+              disabled={currentPage >= totalPages}
+              onClick={() => handlePageChange('next')}
+            >
+              下一页
+            </Button>
+          </Space>
+          
+          <Space>
+            <Text>文件 1 / 1</Text>
+            <Button disabled>上一个文件</Button>
+            <Button disabled>下一个文件</Button>
+          </Space>
+        </div>
+      </Card>
+      
+      {/* QA面板 */}
+      <Card title="问答对管理">
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Text type="secondary">问答对管理功能</Text>
+          <br />
+          <Text type="secondary">
+            支持添加、编辑、删除问答对，设置问题类型和难度等级
+          </Text>
+        </div>
+        
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Button type="primary" block>
+            添加问答对
+          </Button>
+          
+          <Card size="small" title="示例问答对 #1">
+            <div style={{ marginBottom: '1rem' }}>
+              <Text strong>问题：</Text>
+              <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                background: '#f5f5f5', 
+                borderRadius: '4px' 
+              }}>
+                这是一个示例问题？
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: '1rem' }}>
+              <Text strong>答案：</Text>
+              <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                background: '#f5f5f5', 
+                borderRadius: '4px',
+                minHeight: '60px'
+              }}>
+                这是一个示例答案。
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '1rem', fontSize: '12px' }}>
+              <Text type="secondary">类型: 一般问题</Text>
+              <Text type="secondary">难度: 中等</Text>
+              <Text type="secondary">页码: {currentPage}</Text>
+            </div>
+          </Card>
+        </Space>
+      </Card>
+      
+      {/* 调试信息 */}
+      <Card title="调试信息" style={{ marginTop: '1rem' }}>
+        <Paragraph>
+          <Text strong>任务信息:</Text>
+          <pre style={{ background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
+            {JSON.stringify({
+              taskId: task.id,
+              mediaType: task.media_type,
+              hasQAGenerationTool: true,
+              sampleId: sample?.id,
+              preAnnotationId: preAnnotation?.id,
+              pdfUrl: pdfUrl,
+              currentPage: currentPage,
+              totalPages: totalPages
+            }, null, 2)}
+          </pre>
+        </Paragraph>
+      </Card>
+    </div>
+  );
+};
+
 export const imageAnnotationRef = createRef<ImageAnnotatorRef>();
 export const videoAnnotationRef = createRef<AudioAndVideoAnnotatorRef>();
 export const audioAnnotationRef = createRef<AudioAndVideoAnnotatorRef>();
@@ -59,6 +325,16 @@ const AnnotationPage = () => {
   const sample = (useRouteLoaderData('annotation') as any).sample as Awaited<ReturnType<typeof getSample>>;
   const preAnnotation = (useRouteLoaderData('annotation') as any).preAnnotation;
   const { t } = useTranslation();
+
+  // 检查是否为问答对生成任务
+  const isQAGenerationTask = useMemo(() => {
+    return task?.config?.tools?.some((tool: any) => tool.tool === 'qaGenerationTool');
+  }, [task?.config?.tools]);
+
+  // 如果是问答对生成任务，显示问答对生成页面
+  if (isQAGenerationTask && task?.media_type === MediaType.TEXT) {
+    return <QAGenerationAnnotation task={task} sample={sample} preAnnotation={preAnnotation} />;
+  }
 
   const preAnnotationConfig = useMemo(() => {
     const result: Partial<Record<AllToolName, any>> = {};

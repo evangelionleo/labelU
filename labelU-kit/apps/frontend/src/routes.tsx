@@ -9,6 +9,7 @@ import TaskEdit from '@/pages/tasks.[id].edit';
 import TaskAnnotation from '@/pages/tasks.[id].samples.[id]';
 import Samples from '@/pages/tasks.[id]';
 import TaskSamplesFinished from '@/pages/tasks.[id].samples.finished';
+import QAGeneration from '@/pages/tasks.[id].qa-generation';
 import SamplesManagement from '@/pages/samples';
 import Page404 from '@/pages/404';
 import MainLayout from '@/layouts/MainLayoutWithNavigation';
@@ -213,6 +214,16 @@ const routes: RouteObject[] = [
                     },
                   },
                 ],
+              },
+              {
+                path: 'qa-generation',
+                element: <QAGeneration />,
+                loader: taskLoader,
+                handle: {
+                  crumb: () => {
+                    return '问答对生成';
+                  },
+                },
               },
             ],
           },
