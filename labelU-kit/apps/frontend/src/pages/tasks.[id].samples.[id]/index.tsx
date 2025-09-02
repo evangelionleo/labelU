@@ -44,6 +44,13 @@ import {
   type ClickAnnotationResult
 } from '@/api/services/clickAnnotation';
 
+// 添加PDF.js类型声明
+declare global {
+  interface Window {
+    pdfjsLib: any;
+  }
+}
+
 type AllToolName = ToolName | 'segment' | 'frame' | 'tag' | 'text';
 
 // 问答对生成标注组件
@@ -61,6 +68,7 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string>('');
+  const [pdfDocument, setPdfDocument] = useState<any>(null);
   
   console.log('QAGenerationAnnotation 组件开始渲染');
   console.log('任务信息:', task);
@@ -78,12 +86,66 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
     }
   }, [sample, preAnnotation]);
   
-  // 模拟PDF页数（实际应该从PDF文件获取）
+  // 加载PDF文档并获取页数
   useEffect(() => {
-    // 这里应该实际读取PDF文件来获取页数
-    // 暂时设置为模拟值
-    setTotalPages(10);
-  }, []);
+    if (!pdfUrl) return;
+    
+    setPdfLoading(true);
+    setPdfError('');
+    
+    // 动态加载PDF.js库
+    const loadPDFJS = async () => {
+      try {
+        // 检查是否已经加载了PDF.js
+        if (typeof window.pdfjsLib === 'undefined') {
+          // 加载PDF.js CDN
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          script.onload = () => {
+            // 设置worker路径
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            loadPDFDocument();
+          };
+          script.onerror = () => {
+            setPdfError('PDF.js库加载失败');
+            setPdfLoading(false);
+          };
+          document.head.appendChild(script);
+        } else {
+          loadPDFDocument();
+        }
+      } catch (error) {
+        console.error('加载PDF.js失败:', error);
+        setPdfError('PDF.js库加载失败');
+        setPdfLoading(false);
+      }
+    };
+    
+    const loadPDFDocument = async () => {
+      try {
+        console.log('开始加载PDF文档:', pdfUrl);
+        
+        // 使用PDF.js加载文档
+        const loadingTask = window.pdfjsLib.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        
+        console.log('PDF文档加载成功，总页数:', pdf.numPages);
+        
+        setPdfDocument(pdf);
+        setTotalPages(pdf.numPages);
+        setPdfLoading(false);
+        
+        // 重置到第一页
+        setCurrentPage(1);
+      } catch (error: any) {
+        console.error('PDF文档加载失败:', error);
+        setPdfError(`PDF文档加载失败: ${error.message}`);
+        setPdfLoading(false);
+      }
+    };
+    
+    loadPDFJS();
+  }, [pdfUrl]);
   
   // 翻页处理
   const handlePageChange = (direction: 'prev' | 'next') => {
@@ -133,28 +195,24 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       );
     }
     
-    // 实际PDF查看器
+    if (!pdfDocument) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Text type="secondary">PDF文档正在加载中...</Text>
+        </div>
+      );
+    }
+    
+    // 使用PDF.js渲染当前页面
     return (
       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-        {/* 使用iframe显示PDF */}
-        <iframe
-          src={`${pdfUrl}#page=${currentPage}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            borderRadius: '8px'
-          }}
-          title="PDF查看器"
-          onLoad={() => {
-            console.log(`PDF第${currentPage}页加载完成`);
-          }}
-          onError={() => {
-            setPdfError('PDF文件加载失败，请检查文件格式或网络连接');
-          }}
+        <PDFPageRenderer 
+          pdfDocument={pdfDocument} 
+          pageNumber={currentPage} 
+          onPageLoad={() => console.log(`PDF第${currentPage}页渲染完成`)}
         />
         
-        {/* PDF加载状态指示器 */}
+        {/* PDF页面信息指示器 */}
         <div style={{
           position: 'absolute',
           top: '10px',
@@ -303,11 +361,127 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
               preAnnotationId: preAnnotation?.id,
               pdfUrl: pdfUrl,
               currentPage: currentPage,
-              totalPages: totalPages
+              totalPages: totalPages,
+              pdfDocumentLoaded: !!pdfDocument
             }, null, 2)}
           </pre>
         </Paragraph>
       </Card>
+    </div>
+  );
+};
+
+// PDF页面渲染组件
+const PDFPageRenderer = ({ 
+  pdfDocument, 
+  pageNumber, 
+  onPageLoad 
+}: { 
+  pdfDocument: any; 
+  pageNumber: number; 
+  onPageLoad: () => void; 
+}) => {
+  const { Text } = Typography;
+  const [pageCanvas, setPageCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  
+  useEffect(() => {
+    if (!pdfDocument) return;
+    
+    const renderPage = async () => {
+      try {
+        setPageLoading(true);
+        console.log(`开始渲染PDF第${pageNumber}页`);
+        
+        // 获取页面
+        const page = await pdfDocument.getPage(pageNumber);
+        console.log(`获取到PDF第${pageNumber}页:`, page);
+        
+        // 创建canvas
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        
+        if (!context) {
+          throw new Error('无法创建canvas上下文');
+        }
+        
+        // 设置canvas尺寸
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // 渲染页面到canvas
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+        
+        await page.render(renderContext).promise;
+        console.log(`PDF第${pageNumber}页渲染完成`);
+        
+        setPageCanvas(canvas);
+        setPageLoading(false);
+        onPageLoad();
+        
+      } catch (error: any) {
+        console.error(`渲染PDF第${pageNumber}页失败:`, error);
+        setPageLoading(false);
+      }
+    };
+    
+    renderPage();
+  }, [pdfDocument, pageNumber, onPageLoad]);
+  
+  if (pageLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100%',
+        flexDirection: 'column'
+      }}>
+        <Spin size="large" />
+        <div style={{ marginTop: '1rem' }}>
+          <Text>正在渲染第 {pageNumber} 页...</Text>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!pageCanvas) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100%' 
+      }}>
+        <Text type="secondary">页面渲染失败</Text>
+      </div>
+    );
+  }
+  
+  return (
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      height: '100%',
+      overflow: 'auto'
+    }}>
+      <div style={{ 
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        borderRadius: '8px',
+        overflow: 'hidden'
+      }}>
+        <div ref={(el) => {
+          if (el && pageCanvas) {
+            el.innerHTML = '';
+            el.appendChild(pageCanvas);
+          }
+        }} />
+      </div>
     </div>
   );
 };
