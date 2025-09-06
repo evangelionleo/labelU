@@ -2,17 +2,11 @@ import request from '../request';
 import type { RectData } from '@labelu/image/src/annotations/Rect.annotation';
 
 // 点击标注API配置
+// 统一通过前端代理路径，避免直接访问本机localhost:5000导致跨机部署失败
 const getClickAnnotationAPI = () => {
   const { protocol, hostname, port } = window.location;
-  
-  // 如果是开发环境的localhost，直接使用对应端口
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:5000/api`;
-  }
-  
-  // 如果是外网域名（如cpolar），使用代理路径
   const baseUrl = `${protocol}//${hostname}${port ? `:${port}` : ''}`;
-  return `${baseUrl}/api/sam2`;  // 通过前端服务器代理
+  return `${baseUrl}/api/sam2`;
 };
 
 const CLICK_ANNOTATION_API_URL = getClickAnnotationAPI();
