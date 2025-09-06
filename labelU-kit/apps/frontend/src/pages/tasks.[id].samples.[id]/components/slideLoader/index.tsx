@@ -26,7 +26,7 @@ const SlideLoader = () => {
     document.dispatchEvent(
       new CustomEvent(SAMPLE_CHANGED, {
         detail: {
-          sampleId: sample.id,
+          sampleId: sample?.data?.id,  // 修复：从sample.id改为sample?.data?.id
         },
       }),
     );

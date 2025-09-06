@@ -71,12 +71,28 @@ const authorizationBearerFailed = (error: any) => {
 
 const requestConfig = {
   timeout: 60 * 1000,
-  baseURL: '/api',
 };
 
 const request = axios.create(requestConfig);
 
 export const requestWithHeaders = axios.create(requestConfig);
+
+// Resolve baseURL from runtime config each request
+const resolveBaseURL = () => {
+  const w = window as any;
+  const cfg = w.__SERVER_CONFIG || {};
+  const configured = cfg.API_BASE_URL || w.API_BASE_URL || '';
+  return configured ? `${String(configured).replace(/\/$/, '')}/api` : '/api';
+};
+
+request.interceptors.request.use((config: any) => {
+  config.baseURL = resolveBaseURL();
+  return config;
+});
+requestWithHeaders.interceptors.request.use((config: any) => {
+  config.baseURL = resolveBaseURL();
+  return config;
+});
 
 requestWithHeaders.interceptors.request.use(authorizationBearerSuccess, authorizationBearerFailed);
 requestWithHeaders.interceptors.response.use(undefined, authorizationBearerFailed);

@@ -94,7 +94,7 @@ pbs-installer==2025.7.23
 
 Pillow==9.5.0
 
-pip @ file:///croot/pip_1746204010231/work
+# pip @ file:///croot/pip_1746204010231/work
 
 pkginfo==1.12.1.2
 

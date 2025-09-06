@@ -12,4 +12,14 @@ window.React = React;
 // 是否是线上演示环境
 window.IS_ONLINE = !!import.meta.env.VITE_IS_ONLINE;
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+// Load runtime server config from public/server.config.json
+fetch('/server.config.json')
+  .then((r) => (r.ok ? r.json() : { API_BASE_URL: '' }))
+  .then((cfg) => {
+    (window as any).__SERVER_CONFIG = cfg || {};
+    ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+  })
+  .catch(() => {
+    (window as any).__SERVER_CONFIG = {};
+    ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+  });

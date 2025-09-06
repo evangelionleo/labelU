@@ -1,6 +1,6 @@
 import { useState, createRef, useMemo, useCallback, useRef, useLayoutEffect, useEffect } from 'react';
 import * as _ from 'lodash-es';
-import { Empty, Spin, message, Typography, Card, Space, Button, Alert, Tabs, Switch } from 'antd';
+import { Empty, Spin, message, Typography, Card, Space, Button, Alert, Tabs, Switch, Input, InputNumber } from 'antd';
 import { Annotator } from '@labelu/video-annotator-react';
 import type { AudioAndVideoAnnotatorRef } from '@labelu/audio-annotator-react';
 import { Annotator as AudioAnnotator } from '@labelu/audio-annotator-react';
@@ -13,7 +13,7 @@ import { FlexLayout } from '@labelu/components-react';
 import type { ToolName } from '@labelu/image';
 import type { ILabel } from '@labelu/interface';
 import { useTranslation } from '@labelu/i18n';
-import { ScanOutlined, DownloadOutlined } from '@ant-design/icons';
+import { ScanOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons';
 
 import { MediaType, SampleState, type SampleResponse } from '@/api/types';
 import { useScrollFetch } from '@/hooks/useScrollFetch';
@@ -26,6 +26,7 @@ import { convertImageConfig } from '@/utils/convertImageConfig';
 import { convertImageAnnotations, convertImageSample } from '@/utils/convertImageSample';
 import { TOOL_NAME } from '@/constants/toolName';
 import useMe from '@/hooks/useMe';
+import QAGenerationService from '@/api/services/qaGeneration';
 
 import SlideLoader from './components/slideLoader';
 import AnnotationRightCorner from './components/annotationRightCorner';
@@ -63,6 +64,14 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
   const { t } = useTranslation();
   const { Title, Text, Paragraph } = Typography;
   
+  // API配置常量 - 参考demo_gradio_pp.py
+  const API_CONFIG = {
+    deepseek_api_key: "sk-fd949d012f8d47f9a5840ccbe128f5fc",
+    deepseek_model: "deepseek-chat",
+    deepseek_base_url: "https://api.deepseek.com",
+    default_qa_pairs: 5
+  };
+  
   // 获取任务的所有样本和预标注文件
   const { samples, preAnnotations } = useRouteLoaderData('task') as any;
   
@@ -85,6 +94,38 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
   // 样本导航状态
   const [currentSampleIndex, setCurrentSampleIndex] = useState(0);
   const [allSamples, setAllSamples] = useState<any[]>([]);
+  
+  // 问答对生成状态
+  const [qaConfig, setQaConfig] = useState({
+    apiKey: API_CONFIG.deepseek_api_key,
+    model: API_CONFIG.deepseek_model,
+    baseUrl: API_CONFIG.deepseek_base_url,
+    numPairs: API_CONFIG.default_qa_pairs,
+    prompt: `你是一个资深的知识工程师。基于给定知识片段，生成高质量问答对。
+要求：
+- 覆盖关键事实、概念、边界条件；
+- 问题应简洁清晰，答案准确可验证；
+- 输出严格为JSON数组，每个元素包含 question, answer 两个字段；
+- 不要添加任何额外说明。
+示例输出：
+[{"question": "...", "answer": "..."}]`,
+    knowledgeText: ''
+  });
+  
+  // 问答对结果状态
+  const [qaResult, setQaResult] = useState<{
+    markdown: string;
+    json: string;
+    loading: boolean;
+    saving: boolean;
+    error: string;
+  }>({
+    markdown: '',
+    json: '',
+    loading: false,
+    saving: false,
+    error: ''
+  });
   
   console.log('QAGenerationAnnotation 组件开始渲染');
   console.log('任务信息:', task);
@@ -212,8 +253,54 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       const formData = new FormData();
       formData.append('file', blob, `page_${currentPage}_${canvasElement.width}x${canvasElement.height}.png`);
       formData.append('prompt_mode', 'prompt_layout_all_en');
-      formData.append('server_ip', '127.0.0.1');
-      formData.append('server_port', '8000');
+      // 从运行时配置获取服务端 IP/端口（用于 OCR 后端）
+      const runtimeCfg = (window as any).__SERVER_CONFIG || {};
+      const configuredApi = String(runtimeCfg.API_BASE_URL || '');
+      const configuredOcr = String(runtimeCfg.OCR_BASE_URL || '');
+
+      // 推导 OCR 基础地址：
+      // 1) 优先 OCR_BASE_URL
+      // 2) 否则从 API_BASE_URL 解析 URL，强制端口改为 5004，并仅使用 origin
+      const deriveOcrBase = () => {
+        if (configuredOcr) {
+          // 若未包含协议，自动补 http://
+          const withProto = /^https?:\/\//i.test(configuredOcr) ? configuredOcr : `http://${configuredOcr}`;
+          try {
+            const u = new URL(withProto);
+            return `${u.protocol}//${u.hostname}${u.port ? `:${u.port}` : ''}`;
+          } catch {
+            return withProto;
+          }
+        }
+        if (configuredApi) {
+          try {
+            const u = new URL(configuredApi);
+            u.port = '5004';
+            // 清空路径，仅保留协议+主机+端口
+            return `${u.protocol}//${u.hostname}${u.port ? `:${u.port}` : ''}`;
+          } catch {
+            // 回退：简单替换端口
+            const m = configuredApi.match(/^https?:\/\/[^\/]+/);
+            if (m) return m[0].replace(/:\d+$/, ':5004');
+            return configuredApi;
+          }
+        }
+        return '';
+      };
+
+      const ocrBase = deriveOcrBase();
+      const ocrUrl = `${ocrBase ? ocrBase.replace(/\/$/, '') : ''}/realtime/ocr`;
+      console.log('[OCR] runtime cfg:', runtimeCfg, 'configuredApi:', configuredApi, 'configuredOcr:', configuredOcr);
+      console.log('[OCR] derived:', { ocrBase, ocrUrl });
+
+      try {
+        const { hostname, port } = new URL(ocrBase || window.location.origin);
+        formData.append('server_ip', hostname || '');
+        formData.append('server_port', port || '');
+      } catch {
+        formData.append('server_ip', '');
+        formData.append('server_port', '');
+      }
       formData.append('min_pixels', '100000');
       formData.append('max_pixels', '1000000');
       formData.append('fitz_preprocess', 'false');
@@ -221,8 +308,8 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       formData.append('max_image_height', '1300');
       formData.append('max_total_pixels', '1690000');
       
-      // 调用OCR API
-      const response = await fetch('http://localhost:5004/realtime/ocr', {
+      // 调用 OCR API（从运行时配置推导的地址）
+      const response = await fetch(ocrUrl, {
         method: 'POST',
         body: formData
       });
@@ -302,12 +389,12 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
       try {
         // 检查是否已经加载了PDF.js
         if (typeof window.pdfjsLib === 'undefined') {
-          // 加载PDF.js CDN
+          // 加载本地 PDF.js（已放置于 /scripts）
           const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          script.src = '/scripts/pdf.min.js';
           script.onload = () => {
-            // 设置worker路径
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            // 设置本地 worker 路径
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/scripts/pdf.worker.min.js';
             loadPDFDocument();
           };
           script.onerror = () => {
@@ -499,6 +586,379 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
     return html;
   };
 
+  // 生成问答对函数
+  const handleGenerateQA = async () => {
+    if (!qaConfig.knowledgeText.trim()) {
+      message.warning('请先输入知识文本');
+      return;
+    }
+
+    if (!qaConfig.apiKey.trim()) {
+      message.error('请配置DeepSeek API Key');
+      return;
+    }
+
+    try {
+      setQaResult(prev => ({ ...prev, loading: true, error: '' }));
+      message.loading('正在生成问答对...', 0);
+
+      // 构建请求数据
+      const requestData = {
+        model: qaConfig.model,
+        messages: [
+          {
+            role: "system",
+            content: "你是一个资深的知识工程师，专门负责生成高质量的问答对。"
+          },
+          {
+            role: "user",
+            content: `${qaConfig.prompt}\n\n知识文本：\n${qaConfig.knowledgeText}\n\n请生成${qaConfig.numPairs}个问答对。`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      };
+
+      // 调用DeepSeek API
+      const response = await fetch(`${qaConfig.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${qaConfig.apiKey}`
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API调用失败: ${response.status} ${response.statusText} - ${errorData.error?.message || ''}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.choices || !result.choices[0]?.message?.content) {
+        throw new Error('API返回数据格式错误');
+      }
+
+      const content = result.choices[0].message.content;
+      
+      // 尝试解析JSON格式的问答对
+      let qaPairs;
+      try {
+        // 提取JSON部分
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          qaPairs = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('未找到有效的JSON格式');
+        }
+      } catch (parseError) {
+        console.warn('JSON解析失败，使用原始内容:', parseError);
+        qaPairs = content;
+      }
+
+      // 生成Markdown格式
+      let markdown = '';
+      if (Array.isArray(qaPairs)) {
+        markdown = qaPairs.map((qa, index) => {
+          return `## 问题 ${index + 1}\n\n${qa.question}\n\n## 答案 ${index + 1}\n\n${qa.answer}\n\n---\n\n`;
+        }).join('');
+      } else {
+        markdown = content;
+      }
+
+      // 更新结果状态
+      setQaResult({
+        markdown,
+        json: Array.isArray(qaPairs) ? JSON.stringify(qaPairs, null, 2) : content,
+        loading: false,
+        saving: false,
+        error: ''
+      });
+
+      message.destroy();
+      message.success(`成功生成${Array.isArray(qaPairs) ? qaPairs.length : 0}个问答对`);
+
+    } catch (error: any) {
+      console.error('生成问答对失败:', error);
+      setQaResult(prev => ({
+        ...prev,
+        loading: false,
+        saving: false,
+        error: error.message || '生成问答对失败'
+      }));
+      
+      message.destroy();
+      message.error(`生成失败: ${error.message || '未知错误'}`);
+    }
+  };
+
+  // 保存问答对到任务函数
+  const handleSaveQAToTask = async () => {
+    if (!qaResult.json) {
+      message.warning('没有可保存的问答对数据');
+      return;
+    }
+
+    try {
+      setQaResult(prev => ({ ...prev, saving: true }));
+      message.loading('正在保存问答对到任务...', 0);
+
+      // 解析问答对数据
+      let qaPairs;
+      try {
+        qaPairs = JSON.parse(qaResult.json);
+        if (!Array.isArray(qaPairs)) {
+          throw new Error('问答对数据格式错误');
+        }
+      } catch (parseError) {
+        message.destroy();
+        message.error('问答对数据格式错误，无法保存');
+        return;
+      }
+
+      // 构建要保存的数据结构 - 直接保存问答对，不分会话
+      // 过滤掉空的问题或答案，以及没有sampleId的数据
+      const qaDataToSave = qaPairs
+        .filter((qa: any) => qa && qa.question && qa.answer && 
+          qa.question.trim() !== '' && qa.answer.trim() !== '')
+        .map((qa: any, index: number) => ({
+          id: `qa_${Date.now()}_${index}`,
+          question: qa.question.trim(),
+          answer: qa.answer.trim(),
+          prompt: qaConfig.prompt,
+          knowledgeText: qaConfig.knowledgeText,
+          taskId: task.id,
+          sampleId: sample?.data?.id,  // 修复：从sample?.id改为sample?.data?.id
+          preAnnotationId: preAnnotation?.id,
+          currentPage: currentPage,
+          totalPages: totalPages,
+          sampleIndex: currentSampleIndex,
+          filename: allSamples[currentSampleIndex]?.data?.file?.filename || sample?.data?.file?.filename || '未命名文件',
+          config: {
+            apiKey: qaConfig.apiKey ? '***' + qaConfig.apiKey.slice(-4) : '', // 隐藏完整API Key
+            model: qaConfig.model,
+            baseUrl: qaConfig.baseUrl,
+            numPairs: qaConfig.numPairs
+          },
+          createdAt: new Date().toISOString()
+        }))
+        .filter((qa: any) => qa.sampleId !== undefined && qa.sampleId !== null); // 过滤掉没有sampleId的数据
+
+      // 检查过滤后的数据
+      if (qaDataToSave.length === 0) {
+        message.destroy();
+        message.error('没有可保存的问答对数据：所有数据都缺少sampleId字段。请检查样本是否正确加载。');
+        console.error('所有问答对数据都缺少sampleId字段:', qaPairs);
+        console.error('sample对象:', sample);
+        console.error('sample?.id:', sample?.id);
+        return;
+      }
+
+      // 检查是否有有效的问答对数据
+      if (qaDataToSave.length === 0) {
+        message.destroy();
+        message.warning('没有有效的问答对数据可保存');
+        return;
+      }
+
+      console.log('准备保存的问答对数据:', qaDataToSave);
+
+      try {
+        // 1. 首先保存当前新生成的问答对到后端
+        const batchCommand = {
+          qa_pairs: qaDataToSave.map(qa => ({
+            task_id: qa.taskId,
+            sample_id: qa.sampleId,
+            pre_annotation_id: qa.preAnnotationId,
+            question: qa.question,
+            answer: qa.answer,
+            prompt: qa.prompt,
+            knowledge_text: qa.knowledgeText,
+            current_page: qa.currentPage,
+            total_pages: qa.totalPages,
+            sample_index: qa.sampleIndex,
+            filename: qa.filename,
+            api_model: qa.config.model,
+            api_base_url: qa.config.baseUrl,
+            num_pairs: qa.config.numPairs
+          }))
+        };
+
+        const response = await QAGenerationService.batchCreate(batchCommand);
+        
+        // 2. 检查localStorage中本任务下还有哪些数据没有保存到数据库
+        const storageKey = `qa_data_task_${task.id}`;
+        const existingData = localStorage.getItem(storageKey);
+        let allLocalData = [];
+        
+        if (existingData) {
+          try {
+            allLocalData = JSON.parse(existingData);
+          } catch (error) {
+            console.warn('解析现有localStorage数据失败，重置为空数组');
+            allLocalData = [];
+          }
+        }
+
+        // 3. 找出localStorage中未保存到数据库的数据（没有id或id为临时值的数据）
+        const unsavedData = allLocalData.filter((qa: any) => 
+          !qa.id || (typeof qa.id === 'string' && qa.id.startsWith('temp_')) || (typeof qa.id === 'number' && qa.id < 1000)
+        );
+
+        console.log('localStorage中未保存到数据库的数据:', unsavedData);
+
+        // 4. 如果有未保存的数据，一起同步到数据库
+        if (unsavedData.length > 0) {
+          try {
+            const unsavedBatchCommand = {
+              qa_pairs: unsavedData
+                .filter((qa: any) => qa.sampleId !== undefined && qa.sampleId !== null) // 过滤掉没有sampleId的数据
+                .map(qa => ({
+                  task_id: qa.taskId || task.id,
+                  sample_id: qa.sampleId || sample?.data?.id,  // 修复：从sample.id改为sample?.data?.id
+                  pre_annotation_id: qa.preAnnotationId,
+                  question: qa.question,
+                  answer: qa.answer,
+                  prompt: qa.prompt,
+                  knowledge_text: qa.knowledgeText,
+                  current_page: qa.currentPage,
+                  total_pages: qa.totalPages,
+                  sample_index: qa.sampleIndex,
+                  filename: qa.filename,
+                  api_model: qa.config?.model,
+                  api_base_url: qa.config?.baseUrl,
+                  num_pairs: qa.config?.numPairs
+                }))
+            };
+
+            const unsavedResponse = await QAGenerationService.batchCreate(unsavedBatchCommand);
+            console.log('同步未保存数据到数据库成功:', unsavedResponse);
+            
+            message.destroy();
+            message.success(`成功保存${response.total}个新问答对，并同步${unsavedResponse.total}个未保存数据到数据库！`);
+          } catch (syncError: any) {
+            console.warn('同步未保存数据失败:', syncError);
+            message.destroy();
+            message.warning(`新问答对保存成功，但同步未保存数据失败: ${syncError.message || '未知错误'}`);
+          }
+        } else {
+          message.destroy();
+          message.success(`成功保存${response.total}个问答对到后端数据库！`);
+        }
+
+        // 5. 更新localStorage，合并所有数据并标记为已保存
+        const allQAData = [
+          ...qaDataToSave.map((qa: any) => ({ ...qa, id: `saved_${Date.now()}_${Math.random()}` })),
+          ...allLocalData.filter((qa: any) => qa.id && (typeof qa.id !== 'string' || !qa.id.startsWith('temp_')) && (typeof qa.id !== 'number' || qa.id >= 1000))
+        ];
+        
+        localStorage.setItem(storageKey, JSON.stringify(allQAData, null, 2));
+
+        // 6. 刷新已保存数据展示
+        // 延迟刷新，确保数据已更新
+        setTimeout(() => {
+          // 这里可以触发数据刷新，或者让用户手动刷新
+          console.log('数据已保存，建议刷新页面查看最新数据');
+        }, 500);
+
+        console.log('问答对数据已保存到后端:', {
+          response,
+          savedQAPairs: qaDataToSave.length,
+          unsavedDataCount: unsavedData.length,
+          totalLocalData: allQAData.length
+        });
+
+      } catch (apiError: any) {
+        console.error('后端API保存失败:', apiError);
+        
+        // 如果后端保存失败，仍然保存到localStorage作为备份
+        const storageKey = `qa_data_task_${task.id}`;
+        const existingData = localStorage.getItem(storageKey);
+        let allQAData = [];
+        
+        if (existingData) {
+          try {
+            allQAData = JSON.parse(existingData);
+          } catch (error) {
+            console.warn('解析现有数据失败，重置为空数组');
+            allQAData = [];
+          }
+        }
+
+        // 添加新的问答对数据到列表，标记为未保存
+        const newQAData = qaDataToSave.map((qa: any) => ({ 
+          ...qa, 
+          id: `temp_${Date.now()}_${Math.random()}`,
+          savedToDatabase: false 
+        }));
+        
+        allQAData.push(...newQAData);
+        
+        // 保存到localStorage
+        localStorage.setItem(storageKey, JSON.stringify(allQAData, null, 2));
+
+        message.destroy();
+        message.warning(`后端保存失败，已保存到本地缓存。错误: ${apiError.message || '未知错误'}`);
+      }
+
+    } catch (error: any) {
+      console.error('保存问答对到任务失败:', error);
+      setQaResult(prev => ({ ...prev, saving: false }));
+      
+      message.destroy();
+      message.error(`保存失败: ${error.message || '未知错误'}`);
+    } finally {
+      setQaResult(prev => ({ ...prev, saving: false }));
+    }
+  };
+
+  // 查看已保存的问答对数据函数
+  const handleViewSavedQA = () => {
+    try {
+      const storageKey = `qa_data_task_${task.id}`;
+      const savedData = localStorage.getItem(storageKey);
+      
+      if (!savedData) {
+        message.info('当前任务还没有保存的问答对数据');
+        return;
+      }
+
+      const qaData = JSON.parse(savedData);
+      console.log('已保存的问答对数据:', qaData);
+
+      // 显示保存的数据统计信息
+      const totalQAPairs = qaData.length;
+
+      message.info(`当前任务已保存 ${totalQAPairs} 个问答对`);
+
+      // 在控制台显示详细信息
+      console.log('=== 已保存的问答对数据统计 ===');
+      console.log(`任务ID: ${task.id}`);
+      console.log(`总问答对数: ${totalQAPairs}`);
+      
+      qaData.forEach((qa: any, qaIndex: number) => {
+        console.log(`\n--- 问答对 ${qaIndex + 1} ---`);
+        console.log(`ID: ${qa.id}`);
+        console.log(`创建时间: ${qa.createdAt}`);
+        console.log(`样本ID: ${qa.sampleId}`);
+        console.log(`页码: ${qa.currentPage}/${qa.totalPages}`);
+        console.log(`文件名: ${qa.filename}`);
+        console.log(`问题: ${qa.question?.substring(0, 100)}...`);
+        console.log(`答案: ${qa.answer?.substring(0, 100)}...`);
+        console.log(`提示词: ${qa.prompt?.substring(0, 100)}...`);
+        console.log(`知识文本长度: ${qa.knowledgeText?.length || 0} 字符`);
+      });
+
+      // 可以在这里添加一个模态框来显示详细数据
+      // 或者跳转到一个专门的数据查看页面
+
+    } catch (error: any) {
+      console.error('查看已保存数据失败:', error);
+      message.error(`查看失败: ${error.message || '未知错误'}`);
+    }
+  };
+
   // 下载当前页图片函数
   const handleDownloadCurrentPage = async () => {
     try {
@@ -580,6 +1040,28 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
           message="问答对生成页面"
           description="这是问答对生成任务的标注页面"
           type="success"
+          showIcon
+          style={{ marginTop: '1rem' }}
+        />
+        
+        {/* DeepSeek API 配置说明 */}
+        <Alert
+          message="DeepSeek API 配置说明"
+          description={
+            <div>
+              <p>问答对生成功能需要配置DeepSeek API才能正常工作：</p>
+              <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                <li>获取API Key：访问 <a href="https://platform.deepseek.com/" target="_blank" rel="noopener noreferrer">DeepSeek平台</a></li>
+                <li>配置API Key：在下方"问答对生成"面板中输入您的API Key</li>
+                <li>选择模型：推荐使用 deepseek-chat 模型</li>
+                <li>设置数量：可配置生成1-20个问答对</li>
+              </ul>
+              <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#666' }}>
+                💡 提示：API Key将保存在浏览器本地，不会上传到服务器
+              </p>
+            </div>
+          }
+          type="info"
           showIcon
           style={{ marginTop: '1rem' }}
         />
@@ -770,8 +1252,8 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
         </Card>
       </div>
       
-      {/* QA面板 */}
-      <Card title="问答对管理">
+      {/* QA面板 - 已注释 */}
+      {/* <Card title="问答对管理">
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <Text type="secondary">问答对管理功能</Text>
           <br />
@@ -818,10 +1300,10 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
             </div>
           </Card>
         </Space>
-      </Card>
+      </Card> */}
       
-      {/* 调试信息 */}
-      <Card title="调试信息" style={{ marginTop: '1rem' }}>
+      {/* 调试信息 - 已注释 */}
+      {/* <Card title="调试信息" style={{ marginTop: '1rem' }}>
         <Paragraph>
           <Text strong>任务信息:</Text>
           <pre style={{ background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
@@ -848,6 +1330,262 @@ const QAGenerationAnnotation = ({ task, sample, preAnnotation }: {
             }, null, 2)}
           </pre>
         </Paragraph>
+      </Card> */}
+      
+      {/* 问答对生成组件 */}
+      <Card title="问答对生成" style={{ marginBottom: '1rem' }}>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {/* 配置区域 */}
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <div style={{ flex: 1 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Text strong>API配置</Text>
+                
+                {/* API状态指示器 */}
+                <Alert
+                  message={`DeepSeek API 状态: ${qaConfig.apiKey.trim() ? '已配置' : '未配置'}`}
+                  description={
+                    qaConfig.apiKey.trim() 
+                      ? `模型: ${qaConfig.model} | 基础URL: ${qaConfig.baseUrl}`
+                      : '请配置API Key以启用问答对生成功能'
+                  }
+                  type={qaConfig.apiKey.trim() ? 'success' : 'warning'}
+                  showIcon
+                />
+                
+                <Input 
+                  placeholder="DeepSeek API Key" 
+                  type="password"
+                  value={qaConfig.apiKey}
+                  onChange={(e) => setQaConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                  style={{ width: '100%' }}
+                  status={qaConfig.apiKey.trim() ? '' : 'warning'}
+                />
+                <Input 
+                  placeholder="Model (默认: deepseek-chat)" 
+                  value={qaConfig.model}
+                  onChange={(e) => setQaConfig(prev => ({ ...prev, model: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+                <Input 
+                  placeholder="Base URL (默认: https://api.deepseek.com)" 
+                  value={qaConfig.baseUrl}
+                  onChange={(e) => setQaConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+                <InputNumber 
+                  placeholder="问答对数量" 
+                  value={qaConfig.numPairs}
+                  onChange={(value) => setQaConfig(prev => ({ ...prev, numPairs: value || 5 }))}
+                  min={1}
+                  max={20}
+                  style={{ width: '100%' }}
+                />
+              </Space>
+            </div>
+            
+            <div style={{ flex: 2 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Text strong>提示词配置</Text>
+                <Input.TextArea
+                  placeholder="问答对生成提示词"
+                  value={qaConfig.prompt}
+                  onChange={(e) => setQaConfig(prev => ({ ...prev, prompt: e.target.value }))}
+                  rows={8}
+                  style={{ width: '100%' }}
+                />
+              </Space>
+            </div>
+          </div>
+          
+          {/* 知识文本输入区域 */}
+          <div>
+            <Text strong>知识文本输入</Text>
+            <div style={{ marginTop: '0.5rem' }}>
+              <Space>
+                <Button 
+                  size="small"
+                  onClick={() => {
+                    // 从OCR结果填充知识文本
+                    if (ocrResult?.md_content) {
+                      setQaConfig(prev => ({ ...prev, knowledgeText: ocrResult.md_content }));
+                      message.success('已从OCR结果填充知识文本');
+                    } else {
+                      message.warning('请先进行OCR识别');
+                    }
+                  }}
+                >
+                  从OCR结果填充
+                </Button>
+                <Button 
+                  size="small"
+                  onClick={() => {
+                    // 从结构化数据填充知识文本
+                    if (ocrResult?.cells_data) {
+                      const jsonText = JSON.stringify(ocrResult.cells_data, null, 2);
+                      setQaConfig(prev => ({ ...prev, knowledgeText: jsonText }));
+                      message.success('已从结构化数据填充知识文本');
+                    } else {
+                      message.warning('请先进行OCR识别');
+                    }
+                  }}
+                >
+                  从结构化数据填充
+                </Button>
+              </Space>
+            </div>
+            <Input.TextArea
+              placeholder="请输入用于生成问答对的知识文本..."
+              value={qaConfig.knowledgeText}
+              onChange={(e) => setQaConfig(prev => ({ ...prev, knowledgeText: e.target.value }))}
+              rows={10}
+              style={{ marginTop: '0.5rem', width: '100%' }}
+            />
+          </div>
+          
+          {/* 生成按钮 */}
+          <div style={{ textAlign: 'center' }}>
+            <Button 
+              type="primary" 
+              size="large"
+              icon={<RobotOutlined />}
+              onClick={handleGenerateQA}
+              loading={qaResult.loading}
+              disabled={!qaConfig.knowledgeText.trim()}
+            >
+              ⚙️ 生成问答对
+            </Button>
+          </div>
+          
+          {/* 结果展示区域 */}
+          <div>
+            <Text strong>生成结果</Text>
+            <Tabs defaultActiveKey="markdown" style={{ marginTop: '0.5rem' }}>
+              <Tabs.TabPane tab="Markdown预览" key="markdown">
+                <div style={{ 
+                  padding: '16px', 
+                  border: '1px solid #d9d9d9', 
+                  borderRadius: '6px',
+                  backgroundColor: '#fff',
+                  minHeight: '200px',
+                  overflow: 'auto'
+                }}>
+                  {qaResult.loading ? (
+                    <div style={{ textAlign: 'center', padding: '2rem' }}>
+                      <Spin size="large" />
+                      <div style={{ marginTop: '1rem' }}>正在生成问答对...</div>
+                    </div>
+                  ) : qaResult.error ? (
+                    <Alert
+                      message="生成失败"
+                      description={qaResult.error}
+                      type="error"
+                      showIcon
+                    />
+                  ) : qaResult.markdown ? (
+                    <div dangerouslySetInnerHTML={{
+                      __html: renderMarkdown(qaResult.markdown)
+                    }} />
+                  ) : (
+                    <Empty 
+                      description="生成的问答对将在这里显示"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  )}
+                </div>
+              </Tabs.TabPane>
+              <Tabs.TabPane tab="JSON预览" key="json">
+                <div style={{ 
+                  padding: '16px', 
+                  border: '1px solid #d9d9d9', 
+                  borderRadius: '6px',
+                  backgroundColor: '#f6f8fa',
+                  minHeight: '200px',
+                  overflow: 'auto'
+                }}>
+                  {qaResult.loading ? (
+                    <div style={{ textAlign: 'center', padding: '2rem' }}>
+                      <Spin size="large" />
+                      <div style={{ marginTop: '1rem' }}>正在生成问答对...</div>
+                    </div>
+                  ) : qaResult.error ? (
+                    <Alert
+                      message="生成失败"
+                      description={qaResult.error}
+                      type="error"
+                      showIcon
+                    />
+                  ) : qaResult.json ? (
+                    <pre style={{ 
+                      margin: 0, 
+                      fontSize: '12px',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {qaResult.json}
+                    </pre>
+                  ) : (
+                    <Empty 
+                      description="JSON格式的问答对将在这里显示"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  )}
+                </div>
+              </Tabs.TabPane>
+            </Tabs>
+          </div>
+          
+          {/* 操作按钮区域 */}
+          <div style={{ textAlign: 'center' }}>
+            <Space size="middle">
+              {/* 保存到任务按钮 */}
+              <Button 
+                type="primary"
+                disabled={!qaResult.json}
+                icon={<RobotOutlined />}
+                onClick={handleSaveQAToTask}
+                loading={qaResult.saving}
+              >
+                💾 保存到任务
+              </Button>
+              
+              {/* 查看已保存数据按钮 */}
+              <Button 
+                icon={<RobotOutlined />}
+                onClick={handleViewSavedQA}
+              >
+                📋 查看已保存
+              </Button>
+              
+              {/* 下载JSON按钮 */}
+              <Button 
+                disabled={!qaResult.json}
+                icon={<DownloadOutlined />}
+                onClick={() => {
+                  if (qaResult.json) {
+                    // 创建并下载JSON文件
+                    const blob = new Blob([qaResult.json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `qa_pairs_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    message.success('问答对JSON文件已下载');
+                  }
+                }}
+              >
+                ⬇️ 下载JSON
+              </Button>
+            </Space>
+          </div>
+        </Space>
+      </Card>
+      
+      {/* 已保存问答对数据展示组件 */}
+      <Card title="已保存的问答对数据" style={{ marginTop: '1rem' }}>
+        <SavedQADataDisplay taskId={task.id} />
       </Card>
     </div>
   );
@@ -1998,6 +2736,454 @@ const AnnotationPage = () => {
         {content}
       </Wrapper>
     </AnnotationContext.Provider>
+  );
+};
+
+// 已保存问答对数据展示组件
+const SavedQADataDisplay = ({ taskId }: { taskId: number }) => {
+  const { Text, Paragraph } = Typography;
+  const [savedQAData, setSavedQAData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // 加载已保存的问答对数据
+  const loadSavedQAData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // 优先从后端API加载数据
+      try {
+        const response = await QAGenerationService.getByTaskId(taskId, 0, 1000);
+        const apiData = response.items.map(qa => ({
+          id: qa.id,
+          question: qa.question,
+          answer: qa.answer,
+          prompt: qa.prompt,
+          knowledgeText: qa.knowledge_text,
+          currentPage: qa.current_page,
+          totalPages: qa.total_pages,
+          sampleIndex: qa.sample_index,
+          filename: qa.filename,
+          createdAt: qa.created_at,
+          updatedAt: qa.updated_at
+        }));
+        
+        console.log('从后端API加载的数据:', apiData);
+        setSavedQAData(apiData);
+        
+        // 同步到localStorage作为缓存
+        const storageKey = `qa_data_task_${taskId}`;
+        localStorage.setItem(storageKey, JSON.stringify(apiData, null, 2));
+        
+        return;
+      } catch (apiError) {
+        console.warn('后端API加载失败，使用本地缓存:', apiError);
+      }
+      
+      // 如果后端API失败，从localStorage加载缓存数据
+      const storageKey = `qa_data_task_${taskId}`;
+      const savedData = localStorage.getItem(storageKey);
+      
+      if (savedData) {
+        const qaData = JSON.parse(savedData);
+        
+        // 过滤掉无效的问答对数据
+        const validQAData = qaData.filter((qa: any) => {
+          return qa && 
+                 qa.id && 
+                 qa.question && 
+                 qa.answer && 
+                 qa.question.trim() !== '' && 
+                 qa.answer.trim() !== '' &&
+                 qa.createdAt;
+        });
+        
+        console.log('从本地缓存加载的数据:', qaData);
+        console.log('过滤后的有效数据:', validQAData);
+        console.log('过滤掉的数据:', qaData.filter((qa: any) => !validQAData.includes(qa)));
+        
+        setSavedQAData(validQAData);
+        
+        // 如果发现无效数据，自动清理
+        if (validQAData.length !== qaData.length) {
+          console.log('发现无效数据，自动清理...');
+          localStorage.setItem(storageKey, JSON.stringify(validQAData, null, 2));
+        }
+      } else {
+        setSavedQAData([]);
+      }
+    } catch (error) {
+      console.error('加载已保存数据失败:', error);
+      setSavedQAData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [taskId]);
+
+  // 删除指定的问答对
+  const handleDeleteQA = useCallback(async (qaId: string) => {
+    try {
+      // 优先调用后端API删除
+      try {
+        await QAGenerationService.delete(parseInt(qaId));
+        message.success('问答对删除成功');
+      } catch (apiError: any) {
+        console.warn('后端API删除失败，使用本地删除:', apiError);
+        message.warning('后端删除失败，已从本地缓存删除');
+      }
+      
+      // 从本地状态中删除
+      const updatedData = savedQAData.filter(qa => qa.id !== qaId);
+      setSavedQAData(updatedData);
+      
+      // 更新localStorage缓存
+      const storageKey = `qa_data_task_${taskId}`;
+      localStorage.setItem(storageKey, JSON.stringify(updatedData, null, 2));
+      
+    } catch (error) {
+      console.error('删除问答对失败:', error);
+      message.error('删除失败');
+    }
+  }, [taskId, savedQAData]);
+
+  // 清空所有问答对数据
+  const handleClearAllQA = useCallback(async () => {
+    try {
+      // 优先调用后端API清空
+      try {
+        await QAGenerationService.deleteByTaskId(taskId);
+        message.success('所有问答对数据已从后端清空');
+      } catch (apiError: any) {
+        console.warn('后端API清空失败，使用本地清空:', apiError);
+        message.warning('后端清空失败，已从本地缓存清空');
+      }
+      
+      // 清空本地状态和缓存
+      const storageKey = `qa_data_task_${taskId}`;
+      localStorage.removeItem(storageKey);
+      setSavedQAData([]);
+      
+    } catch (error) {
+      console.error('清空数据失败:', error);
+      message.error('清空失败');
+    }
+  }, [taskId]);
+
+  // 导出所有问答对数据
+  const handleExportAllQA = useCallback(async () => {
+    try {
+      if (savedQAData.length === 0) {
+        message.warning('没有可导出的数据');
+        return;
+      }
+
+      // 优先从后端获取最新数据
+      let exportData;
+      try {
+        const response = await QAGenerationService.getByTaskId(taskId, 0, 10000);
+        exportData = {
+          taskId,
+          exportTime: new Date().toISOString(),
+          totalQAPairs: response.total,
+          qaPairs: response.items.map(qa => ({
+            id: qa.id,
+            question: qa.question,
+            answer: qa.answer,
+            prompt: qa.prompt,
+            knowledge_text: qa.knowledge_text,
+            current_page: qa.current_page,
+            total_pages: qa.total_pages,
+            sample_index: qa.sample_index,
+            filename: qa.filename,
+            api_model: qa.api_model,
+            api_base_url: qa.api_base_url,
+            num_pairs: qa.num_pairs,
+            created_at: qa.created_at,
+            updated_at: qa.updated_at
+          }))
+        };
+        message.success(`从后端获取最新数据，共 ${response.total} 个问答对`);
+      } catch (apiError) {
+        console.warn('后端API获取失败，使用本地缓存数据:', apiError);
+        exportData = {
+          taskId,
+          exportTime: new Date().toISOString(),
+          totalQAPairs: savedQAData.length,
+          qaPairs: savedQAData,
+          note: '使用本地缓存数据，可能不是最新'
+        };
+        message.warning('使用本地缓存数据导出');
+      }
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qa_pairs_task_${taskId}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      message.success(`成功导出 ${exportData.totalQAPairs} 个问答对`);
+    } catch (error) {
+      console.error('导出数据失败:', error);
+      message.error('导出失败');
+    }
+  }, [taskId, savedQAData]);
+
+  // 切换展开/收起状态
+  const toggleExpanded = useCallback((qaId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(qaId)) {
+        newSet.delete(qaId);
+      } else {
+        newSet.add(qaId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // 组件加载时自动加载数据
+  useEffect(() => {
+    // 延迟加载，确保组件完全挂载
+    const timer = setTimeout(() => {
+      loadSavedQAData();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [loadSavedQAData]);
+
+  // 如果没有数据，显示空状态
+  if (savedQAData.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <Empty 
+          description="还没有保存的问答对数据"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+        <div style={{ marginTop: '1rem' }}>
+          <Text type="secondary">
+            生成问答对后，点击"保存到任务"按钮即可在这里查看
+          </Text>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+              {/* 数据统计和操作按钮 */}
+        <div style={{ marginBottom: '1rem' }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div>
+              <Space size="middle" align="center">
+                <Text strong>总计: {savedQAData.length} 个问答对</Text>
+                <Button 
+                  size="small" 
+                  onClick={loadSavedQAData}
+                  loading={loading}
+                >
+                  🔄 刷新
+                </Button>
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    try {
+                      const storageKey = `qa_data_task_${taskId}`;
+                      const savedData = localStorage.getItem(storageKey);
+                      
+                      if (savedData) {
+                        const qaData = JSON.parse(savedData);
+                        const validQAData = qaData.filter((qa: any) => {
+                          return qa && 
+                                 qa.id && 
+                                 qa.question && 
+                                 qa.answer && 
+                                 qa.question.trim() !== '' && 
+                                 qa.answer.trim() !== '' &&
+                                 qa.createdAt;
+                        });
+                        
+                        if (validQAData.length !== qaData.length) {
+                          localStorage.setItem(storageKey, JSON.stringify(validQAData, null, 2));
+                          setSavedQAData(validQAData);
+                          message.success(`数据清理完成，移除了 ${qaData.length - validQAData.length} 条无效数据`);
+                        } else {
+                          message.info('没有发现无效数据，无需清理');
+                        }
+                      }
+                    } catch (error) {
+                      console.error('数据清理失败:', error);
+                      message.error('数据清理失败');
+                    }
+                  }}
+                >
+                  🧹 清理无效数据
+                </Button>
+                <Button 
+                  size="small" 
+                  type="primary"
+                  onClick={handleExportAllQA}
+                  disabled={savedQAData.length === 0}
+                >
+                  📤 导出全部
+                </Button>
+                <Button 
+                  size="small" 
+                  danger
+                  onClick={() => {
+                    Modal.confirm({
+                      title: '确认清空',
+                      content: `确定要清空所有 ${savedQAData.length} 个问答对数据吗？此操作不可恢复！`,
+                      okText: '确认清空',
+                      cancelText: '取消',
+                      okType: 'danger',
+                      onOk: handleClearAllQA
+                    });
+                  }}
+                  disabled={savedQAData.length === 0}
+                >
+                  🗑️ 清空全部
+                </Button>
+              </Space>
+            </div>
+            
+            {/* 调试信息 */}
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              <Text type="secondary">
+                存储键: qa_data_task_{taskId} | 
+                最后更新: {new Date().toLocaleString()} | 
+                数据状态: {savedQAData.length > 0 ? '正常' : '空'}
+              </Text>
+            </div>
+          </Space>
+        </div>
+
+      {/* 问答对列表 */}
+      <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+        {savedQAData.map((qa, index) => (
+          <Card 
+            key={qa.id} 
+            size="small" 
+            style={{ marginBottom: '0.5rem' }}
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>问答对 #{index + 1}</span>
+                <Space size="small">
+                  <Button 
+                    size="small" 
+                    type="text"
+                    onClick={() => toggleExpanded(qa.id)}
+                  >
+                    {expandedItems.has(qa.id) ? '收起' : '展开'}
+                  </Button>
+                  <Button 
+                    size="small" 
+                    danger
+                    type="text"
+                    onClick={() => {
+                      Modal.confirm({
+                        title: '确认删除',
+                        content: '确定要删除这个问答对吗？',
+                        okText: '确认删除',
+                        cancelText: '取消',
+                        okType: 'danger',
+                        onOk: () => handleDeleteQA(qa.id)
+                      });
+                    }}
+                  >
+                    删除
+                  </Button>
+                </Space>
+              </div>
+            }
+          >
+            {/* 基本信息 */}
+            <div style={{ marginBottom: '0.5rem' }}>
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <div>
+                  <Text strong>问题：</Text>
+                  <div style={{ 
+                    marginTop: '0.25rem', 
+                    padding: '0.5rem', 
+                    background: '#f5f5f5', 
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}>
+                    {qa.question}
+                  </div>
+                </div>
+                
+                <div>
+                  <Text strong>答案：</Text>
+                  <div style={{ 
+                    marginTop: '0.25rem', 
+                    padding: '0.5rem', 
+                    background: '#f5f5f5', 
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    minHeight: '40px'
+                  }}>
+                    {qa.answer}
+                  </div>
+                </div>
+              </Space>
+            </div>
+
+            {/* 展开后的详细信息 */}
+            {expandedItems.has(qa.id) && (
+              <div style={{ 
+                marginTop: '1rem', 
+                paddingTop: '1rem',
+                borderTop: '1px solid #f0f0f0'
+              }}>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <div>
+                    <Text strong>提示词：</Text>
+                    <div style={{ 
+                      marginTop: '0.25rem', 
+                      padding: '0.5rem', 
+                      background: '#f6f8fa', 
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                      maxHeight: '100px',
+                      overflow: 'auto'
+                    }}>
+                      {qa.prompt}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Text strong>知识文本：</Text>
+                    <div style={{ 
+                      marginTop: '0.25rem', 
+                      padding: '0.5rem', 
+                      background: '#f6f8fa', 
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      maxHeight: '150px',
+                      overflow: 'auto'
+                    }}>
+                      {qa.knowledgeText}
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '1rem', fontSize: '12px' }}>
+                    <Text type="secondary">页码: {qa.currentPage}/{qa.totalPages}</Text>
+                    <Text type="secondary">样本: {qa.sampleIndex + 1}</Text>
+                    <Text type="secondary">文件: {qa.filename}</Text>
+                    <Text type="secondary">创建: {new Date(qa.createdAt).toLocaleString()}</Text>
+                  </div>
+                </Space>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 };
 

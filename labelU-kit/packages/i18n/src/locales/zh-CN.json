@@ -230,7 +230,7 @@
   "finish": "完成",
   "unannotated": "未标注",
   "backToSamples": "返回样本列表",
-  "404notFound": "页面不存在",
+  "404notFound": "模块正在开发中",
   "selectExportFormat": "选择导出格式",
   "doExport": "导出",
   "exportFormat": "导出格式",
@@ -368,6 +368,6 @@
   "relationToolTooltip": "关联关系工具只能与矩形或多边形工具一起使用",
 
   
-  "platformTitle": "数梭数据标注工具",
+  "platformTitle": "国能数据标注工具",
   "capabilityShowcase": "能力展示"
 }

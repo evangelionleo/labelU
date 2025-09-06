@@ -2,7 +2,11 @@ import os
 from pathlib import Path
 
 from loguru import logger
-from pydantic import BaseSettings, Field
+try:
+    from pydantic import BaseSettings, Field
+except ImportError:
+    from pydantic_settings import BaseSettings
+    from pydantic import Field
 
 from labelu.internal.common.io import get_data_dir
 
