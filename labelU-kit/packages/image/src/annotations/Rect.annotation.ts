@@ -68,9 +68,13 @@ export class AnnotationRect extends Annotation<RectData, RectStyle> {
       }),
     );
 
+    // 点击标注的矩形：仍显示左上方标签，但隐藏底部属性，避免显示无意义文本
+    const isClickAnnotation = (data as any)?.attributes?.source === 'click_annotation' || data.label === 'click_annotation';
+
     const labelText = AnnotationRect.labelStatic.getLabelText(data.label);
     const attributesText = AnnotationRect.labelStatic.getAttributeTexts(data.label, data.attributes);
 
+    // 始终渲染左上方标签
     this.doms.push(
       new DomPortal({
         content: this.generateLabelDom(labelText),
@@ -87,7 +91,8 @@ export class AnnotationRect extends Annotation<RectData, RectStyle> {
       }),
     );
 
-    if (attributesText) {
+    // 仅非点击标注时渲染底部属性
+    if (attributesText && !isClickAnnotation) {
       this.doms.push(
         new DomPortal({
           content: this.generateAttributeDom(attributesText),
