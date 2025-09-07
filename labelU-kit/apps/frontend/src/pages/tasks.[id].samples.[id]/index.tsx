@@ -2125,6 +2125,16 @@ const AnnotationPage = () => {
       const newState = !prev;
       if (newState) {
         message.info('点击标注已激活，图片将被恢复到适应容器的大小和位置');
+        // 重新开启点击标注工具时，自动切换到下一个对象，避免影响已有框
+        if (clickAnnotationSession?.sessionId && clickAnnotationSessionActive) {
+          try {
+            startNewClickAnnotationObject(clickAnnotationSession.sessionId);
+            // 清空当前对象点集，开始新对象
+            setCurrentObjectPoints([]);
+          } catch (e) {
+            console.warn('启动新对象失败（可忽略）:', e);
+          }
+        }
       } else {
         message.info('点击标注已关闭');
       }
@@ -2132,7 +2142,7 @@ const AnnotationPage = () => {
     });
     // 确保智能标注关闭
     setSmartAnnotationActive(false);
-  }, []);
+  }, [clickAnnotationSession?.sessionId, clickAnnotationSessionActive]);
 
   const handleAddClickAnnotationPoint = useCallback((point: {id: number; x: number; y: number; type: 'positive' | 'negative'}) => {
     console.log('添加点击标注点:', point);
@@ -2447,10 +2457,19 @@ const AnnotationPage = () => {
     
     // 增加对象ID
     setCurrentObjectId(prev => prev + 1);
+
+    // 会话仍有效时，通知点击标注服务开始一个新对象（使用新矩形id），不影响已存在的框
+    if (clickAnnotationSession?.sessionId && clickAnnotationSessionActive) {
+      try {
+        startNewClickAnnotationObject(clickAnnotationSession.sessionId);
+      } catch (e) {
+        console.warn('切换新对象失败（可忽略）:', e);
+      }
+    }
     
     message.success(`已切换到对象 ${currentObjectId + 1}，当前对象点击点已清除`);
     console.log('切换到对象:', currentObjectId + 1);
-  }, [currentObjectId, currentObjectPoints]);
+  }, [currentObjectId, currentObjectPoints, clickAnnotationSession?.sessionId, clickAnnotationSessionActive]);
 
   // 处理图片点击事件
   const handleImageClick = useCallback((e: React.MouseEvent) => {
