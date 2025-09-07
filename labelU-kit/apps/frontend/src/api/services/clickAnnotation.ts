@@ -33,6 +33,23 @@ export interface ClickAnnotationResult {
 // 添加一个全局计数器用于生成顺序ID
 let clickAnnotationIdCounter = 1;
 
+// 维护每个会话当前对象对应的 RectId，用于“未清零前只更新同一个框”的需求
+const sessionIdToCurrentRectId: Record<string, string> = {};
+
+// 获取或创建当前会话的稳定 RectId
+function getOrCreateCurrentRectId(sessionId: string): string {
+  if (!sessionIdToCurrentRectId[sessionId]) {
+    sessionIdToCurrentRectId[sessionId] = `click_annotation_${clickAnnotationIdCounter++}`;
+  }
+  return sessionIdToCurrentRectId[sessionId];
+}
+
+// 开始新的对象（例如手动切换到下一个对象时调用）
+export function startNewClickAnnotationObject(sessionId: string): void {
+  // 新对象应使用新的 RectId
+  sessionIdToCurrentRectId[sessionId] = `click_annotation_${clickAnnotationIdCounter++}`;
+}
+
 // 第一步：与后端通信 - 启动点击标注会话
 export async function startClickAnnotationSession(imageFile: File): Promise<ClickAnnotationSession> {
   try {
@@ -148,6 +165,7 @@ export async function clearClickPoints(sessionId: string): Promise<void> {
     }
     
     console.log('点击点清除成功');
+    // 不删除会话的当前框映射，保持同一对象下框 id 稳定
     
   } catch (error) {
     console.error('清除点击点失败:', error);
@@ -157,11 +175,12 @@ export async function clearClickPoints(sessionId: string): Promise<void> {
 
 // 第二步：与服务端通信 - 将分割结果转换为拉框数据
 export function convertMaskToRectData(
-  mask: string | any, 
+  mask: string | any,
   bbox: { x: number; y: number; w: number; h: number } | { x: number; y: number; width: number; height: number } | number[],
   imageWidth: number,
   imageHeight: number,
-  label: string = 'click_annotation'
+  label: string = 'click_annotation',
+  options?: { sessionId?: string; newObject?: boolean }
 ): RectData {
   console.log('=== convertMaskToRectData 函数开始 ===');
   console.log('输入参数:');
@@ -200,14 +219,29 @@ export function convertMaskToRectData(
     bboxObj = bbox as { x: number; y: number; width: number; height: number };
   }
   
+  // 计算要使用的 RectId：
+  // - 如果提供了 sessionId：
+  //   - 当 newObject 为 true 时，强制开始新的对象并生成新 RectId；
+  //   - 否则复用会话下的当前 RectId，实现“未清零前只更新同一框”。
+  // - 未提供 sessionId 时，退化为每次生成新 RectId（保持兼容）。
+  let rectId: string;
+  if (options?.sessionId) {
+    if (options.newObject) {
+      startNewClickAnnotationObject(options.sessionId);
+    }
+    rectId = getOrCreateCurrentRectId(options.sessionId);
+  } else {
+    rectId = `click_annotation_${clickAnnotationIdCounter++}`;
+  }
+
   // 将掩码的边界框转换为拉框数据
   const rectData: RectData = {
-    id: `click_annotation_${clickAnnotationIdCounter++}`, // 使用简单的顺序ID
+    id: rectId,
     x: bboxObj.x,
     y: bboxObj.y,
     width: bboxObj.width,
     height: bboxObj.height,
-    order: clickAnnotationIdCounter, // 使用顺序ID作为order
+    order: clickAnnotationIdCounter, // 维持顺序计数（仅用于排序，不影响 id 复用）
     label: label,
     visible: true,
     valid: true,

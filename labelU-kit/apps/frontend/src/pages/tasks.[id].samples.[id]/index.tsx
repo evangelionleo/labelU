@@ -42,6 +42,7 @@ import {
   clearClickPoints, 
   convertMaskToRectData,
   convertPercentageToPixel,
+  startNewClickAnnotationObject,
   type ClickAnnotationSession,
   type ClickAnnotationResult
 } from '@/api/services/clickAnnotation';
@@ -2269,7 +2270,8 @@ const AnnotationPage = () => {
           result.bbox,
           imageWidth,
           imageHeight,
-          getCurrentLabel() // 使用当前选中的标签
+          getCurrentLabel(), // 使用当前选中的标签
+          { sessionId: clickAnnotationSession.sessionId }
         );
 
         console.log('=== 转换后的拉框数据 ===');
@@ -2315,16 +2317,19 @@ const AnnotationPage = () => {
                 }
               }
 
-              // Filter out previous click_annotation rects to only show the latest one for the current object
-              const otherRects = currentRectData.filter((rect: any) =>
-                !rect.id?.startsWith('click_annotation_')
-              );
-
-              // 添加新的标注数据 (only the latest one from the loop)
-              const updatedRectData = [...otherRects, rectData];
+              // 用 id 匹配的方式覆盖已有的 click_annotation 框，避免产生新框
+              const updatedRectData = [
+                ...currentRectData.filter((rect: any) => rect.id !== rectData.id),
+                rectData,
+              ];
               console.log('更新后的rect数据:', updatedRectData);
 
-              // 通过引擎的loadData方法添加标注
+              // 通过引擎的clearData+loadData覆盖标注，避免追加导致重复
+              try {
+                engine.clearData();
+              } catch (e) {
+                // 旧版本可能没有clearData，忽略错误
+              }
               engine.loadData('rect', updatedRectData);
 
               // 验证数据是否成功添加
@@ -2393,6 +2398,8 @@ const AnnotationPage = () => {
 
       // 清除后端会话中的点击点
       await clearClickPoints(clickAnnotationSession.sessionId);
+      // 切到下一个对象（清零后需要新的框 id）
+      startNewClickAnnotationObject(clickAnnotationSession.sessionId);
 
       // 清除当前对象的点击点
       setCurrentObjectPoints([]);
