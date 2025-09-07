@@ -13,7 +13,7 @@ import QAGeneration from '@/pages/tasks.[id].qa-generation';
 import SamplesManagement from '@/pages/samples';
 import Page404 from '@/pages/404';
 import MainLayout from '@/layouts/MainLayoutWithNavigation';
-import Dashboard from '@/pages/dashboard';
+import HomePage from '@/pages/home';
 import PreAnnotation from '@/pages/pre-annotation';
 import Users from '@/pages/users';
 import Teams from '@/pages/teams';
@@ -66,13 +66,13 @@ const routes: RouteObject[] = [
         id: 'dashboard',
         handle: {
           crumb: () => {
-            return i18n.t('dashboard');
+            return '首页';
           },
         },
         children: [
           {
             index: true,
-            element: <Dashboard />,
+            element: <HomePage />,
           },
         ],
       },

@@ -55,19 +55,8 @@ function Breadcrumb({ className, hideHome = false, style }: BreadcrumbProps) {
   // 判断是否在顶级页面（只有一层路径或没有深层面包屑）
   const isTopLevel = crumbs.length <= 1;
 
-  // 顶级导航项
-  const topLevelNavItems = [
-    {
-      pathname: '/tasks',
-      crumb: t('taskList'), // "任务大厅"
-      isActive: location.pathname === '/tasks' || location.pathname === '/',
-    },
-    {
-      pathname: '/capability-showcase',
-      crumb: t('capabilityShowcase'), // "能力展示"
-      isActive: location.pathname === '/capability-showcase',
-    },
-  ];
+  // 顶级导航项（临时隐藏“任务大厅”和“能力展示”）
+  const topLevelNavItems: Array<{ pathname: string; crumb: string; isActive: boolean }> = [];
 
   return (
     // @ts-ignore

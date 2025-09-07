@@ -61,138 +61,14 @@ const Sidebar: React.FC = () => {
 
   // 菜单项配置
   const menuItems = [
-    {
-      key: '/dashboard',
-      icon: <DashboardOutlined />,
-      label: '仪表板',
-      children: [
-        {
-          key: '/dashboard/overview',
-          label: '概览',
-        },
-        {
-          key: '/dashboard/analytics',
-          label: '数据分析',
-        },
-      ],
-    },
-    {
-      key: '/tasks',
-      icon: <ProjectOutlined />,
-      label: '任务大厅',
-      children: [
-        {
-          key: '/tasks',
-          label: '全部任务',
-        },
-        {
-          key: '/tasks/0/edit?isNew=true',
-          label: '新建任务',
-        },
-      ],
-    },
-    {
-      key: '/samples',
-      icon: <FileTextOutlined />,
-      label: '样本管理',
-      children: [
-        {
-          key: '/samples-management',
-          label: '导出文件管理',
-        },
-      ],
-    },
-    {
-      key: '/pre-annotation',
-      icon: <RobotOutlined />,
-      label: '预标注任务',
-      children: [
-        {
-          key: '/pre-annotation/tasks',
-          label: '预标注任务列表',
-        },
-        {
-          key: '/pre-annotation/create',
-          label: '创建预标注任务',
-        },
-        {
-          key: '/pre-annotation/models',
-          label: '模型管理',
-        },
-        {
-          key: '/pre-annotation/results',
-          label: '预标注结果',
-        },
-      ],
-    },
-    {
-      key: '/users',
-      icon: <UserOutlined />,
-      label: '用户管理',
-      children: [
-        {
-          key: '/users/list',
-          label: '用户列表',
-        },
-        {
-          key: '/users/roles',
-          label: '用户角色',
-        },
-      ],
-    },
-    {
-      key: '/teams',
-      icon: <TeamOutlined />,
-      label: '团队管理',
-      children: [
-        {
-          key: '/teams/list',
-          label: '团队列表',
-        },
-        {
-          key: '/teams/projects',
-          label: '团队项目',
-        },
-      ],
-    },
-    {
-      key: '/reports',
-      icon: <BarChartOutlined />,
-      label: '报表中心',
-      children: [
-        {
-          key: '/reports/progress',
-          label: '进度报表',
-        },
-        {
-          key: '/reports/quality',
-          label: '质量报表',
-        },
-        {
-          key: '/reports/performance',
-          label: '绩效报表',
-        },
-      ],
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: '系统设置',
-      children: [
-        {
-          key: '/settings/profile',
-          label: '个人设置',
-        },
-        {
-          key: '/settings/system',
-          label: '系统设置',
-        },
-        {
-          key: '/settings/security',
-          label: '安全设置',
-        },
-      ],
-    },
+    { key: '/dashboard', icon: <DashboardOutlined />, label: '首页' },
+    { key: '/tasks', icon: <ProjectOutlined />, label: '任务大厅' },
+    { key: '/samples', icon: <FileTextOutlined />, label: '样本管理' },
+    { key: '/pre-annotation', icon: <RobotOutlined />, label: '预标注任务' },
+    { key: '/users', icon: <UserOutlined />, label: '用户管理' },
+    { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
+    { key: '/reports', icon: <BarChartOutlined />, label: '报表中心' },
+    { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
 
   // 处理菜单点击
@@ -252,7 +128,7 @@ const Sidebar: React.FC = () => {
       <Menu
         mode="inline"
         selectedKeys={getSelectedKeys()}
-        defaultOpenKeys={collapsed ? [] : ['/dashboard', '/tasks', '/samples']}
+        defaultOpenKeys={[]}
         style={{ height: '100%', borderRight: 0 }}
         items={menuItems}
         onClick={handleMenuClick}
